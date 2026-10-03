@@ -21,12 +21,12 @@ init_nltk()
 
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(
-    page_title="Emerald Advanced Analytics & Gmail Alert",
+    page_title="Emerald Advanced Analytics & News Sentiment",
     page_icon="📈",
     layout="wide"
 )
 
-# --- 2. CUSTOM CSS (Dark & Emerald Luxury Theme) ---
+# --- 2. CUSTOM CSS ---
 custom_css = """
 <style>
     .stApp { background-color: #0B0E11; color: #EAEAEA; }
@@ -49,15 +49,13 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# --- 3. GMAIL ALERT FUNCTION ---
+# --- 3. HELPER FUNCTIONS ---
 
 def send_gmail_alert(sender_email, app_password, receiver_email, ticker, current_price, timeframe, signals, gz_min, gz_max):
-    """ ส่งอีเมล HTML แจ้งเตือนเข้า Gmail """
     if not sender_email or not app_password or not receiver_email or not signals:
         return False, "กรุณากรอกข้อมูล Gmail ให้ครบถ้วน"
     
     subject = f"🚨 EMERALD BUY ALERT: {ticker} (${current_price:.2f})"
-    
     signals_html = "".join([f"<li style='padding: 4px 0; color: #00FF00;'><b>{s}</b></li>" for s in signals])
     
     body = f"""
@@ -67,22 +65,16 @@ def send_gmail_alert(sender_email, app_password, receiver_email, ticker, current
             <h2 style="color: #00FF00; margin-top: 0;">🚨 EMERALD BUY SIGNAL ALERT</h2>
             <p style="font-size: 16px; color: #FFFFFF;">พบสัญญาณเข้าซื้อสำหรับหุ้น <b>{ticker}</b></p>
             <hr style="border: 0.5px solid #1E232A;">
-            
             <table style="width: 100%; margin: 15px 0; font-size: 14px;">
                 <tr><td style="color: #8B949E;">Ticker Symbol:</td><td style="color: #FFFFFF; font-weight: bold;">{ticker}</td></tr>
                 <tr><td style="color: #8B949E;">Last Price:</td><td style="color: #00FF00; font-weight: bold;">${current_price:.2f}</td></tr>
                 <tr><td style="color: #8B949E;">Timeframe:</td><td style="color: #FFFFFF;">{timeframe}</td></tr>
-                <tr><td style="color: #8B949E;">Golden Zone:</td><td style="color: #00FF00;">${gz_min:.2f} - ${gz_max:.2f}</td></tr>
+                <tr><td style="color: #8B949E;">Golden Zone:</td><td style="color: #00FF00;">${gz_min:.2f} -${gz_max:.2f}</td></tr>
             </table>
-            
             <h4 style="color: #FFFFFF; margin-bottom: 5px;">🔍 Confluence Signals Detected:</h4>
             <ul style="background-color: #161B22; padding: 15px 25px; border-radius: 6px; list-style-type: square;">
                 {signals_html}
             </ul>
-            
-            <p style="font-size: 12px; color: #8B949E; margin-top: 20px;">
-                <i>* ระบบทำการสแกนอัตโนมัติด้วย Golden Zone + Indicator Analysis (Emerald System)</i>
-            </p>
         </div>
     </body>
     </html>
@@ -105,14 +97,13 @@ def send_gmail_alert(sender_email, app_password, receiver_email, ticker, current
         return False, f"เกิดข้อผิดพลาดในการส่งอีเมล: {str(e)}"
 
 
-# --- 4. TECHNICAL ANALYSIS FUNCTIONS ---
-
 def calculate_rsi(series, period=14):
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
     rs = gain / loss
     return 100 - (100 / (1 + rs))
+
 
 def detect_divergence(df, peaks_high, peaks_low):
     divergence_signals = []
@@ -135,6 +126,7 @@ def detect_divergence(df, peaks_high, peaks_low):
             divergence_signals.append("Hidden Bearish Divergence (เทรนด์ลงต่อ)")
 
     return divergence_signals
+
 
 @st.cache_data(ttl=600)
 def fetch_and_analyze(ticker_symbol: str, period="6mo", interval="1d", distance=10, prominence=2):
@@ -201,7 +193,39 @@ def fetch_and_analyze(ticker_symbol: str, period="6mo", interval="1d", distance=
     return df, analysis_results
 
 
-# --- 5. SIDEBAR CONTROL ---
+@st.cache_data(ttl=1800)
+def scrape_news_sentiment(ticker_symbol: str):
+    url = f"https://finviz.com/quote.ashx?t={ticker_symbol}"
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        news_table = soup.find(id='news-table')
+        if not news_table:
+            return pd.DataFrame()
+
+        parsed_news = []
+        sia = SentimentIntensityAnalyzer()
+        rows = news_table.find_all('tr')
+        
+        for row in rows[:10]:
+            if row.a:
+                title = row.a.text
+                time_str = row.td.text.strip()
+                score = sia.polarity_scores(title)['compound']
+                sentiment = "BULLISH 🟢" if score >= 0.05 else ("BEARISH 🔴" if score <= -0.05 else "NEUTRAL ⚪")
+                parsed_news.append({
+                    'Time': time_str,
+                    'Headline': title,
+                    'Sentiment Score': score,
+                    'Sentiment': sentiment
+                })
+        return pd.DataFrame(parsed_news)
+    except Exception:
+        return pd.DataFrame()
+
+
+# --- 4. SIDEBAR CONTROL ---
 st.sidebar.markdown("<h2 style='color: #00FF00;'>⚡ CONTROL PANEL</h2>", unsafe_allow_html=True)
 ticker = st.sidebar.text_input("SYMBOL", value="NVDA").upper()
 interval = st.sidebar.selectbox("TIMEFRAME", ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"], index=4)
@@ -223,7 +247,7 @@ st.sidebar.markdown("---")
 analyze_btn = st.sidebar.button("RUN ANALYSIS")
 
 
-# --- 6. MAIN CONTENT ---
+# --- 5. MAIN CONTENT ---
 st.markdown("<h1>📈 EMERALD <span class='emerald-accent'>STOCK ANALYZER</span></h1>", unsafe_allow_html=True)
 
 if ticker:
@@ -237,7 +261,7 @@ if ticker:
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("PRICE", f"${res['current_price']:.2f}")
             c2.metric("RSI (14)", f"{res['current_rsi']:.1f}")
-            c3.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} - ${res['gz_max']:.2f}")
+            c3.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} -${res['gz_max']:.2f}")
             c4.metric("GZ STATUS", "IN ZONE 🎯" if res['in_gz'] else "OUTSIDE ZONE")
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -245,7 +269,7 @@ if ticker:
             # --- CHECK SIGNAL & SEND GMAIL ---
             bullish_signals = []
             if res['in_gz']:
-                bullish_signals.append(f"Price is in Golden Zone (${res['gz_min']:.2f} - ${res['gz_max']:.2f})")
+                bullish_signals.append(f"Price is in Golden Zone (${res['gz_min']:.2f} -${res['gz_max']:.2f})")
             for div in res['divergences']:
                 if "Bullish" in div:
                     bullish_signals.append(div)
@@ -254,7 +278,6 @@ if ticker:
             if res['current_rsi'] <= 30:
                 bullish_signals.append(f"RSI Oversold ({res['current_rsi']:.1f})")
 
-            # ส่งอีเมลถ้าอยู่ใน Golden Zone + มีสัญญาณกระทิงร่วม
             if res['in_gz'] and len(bullish_signals) > 1 and enable_email_alert:
                 if sender_email and app_password and receiver_email:
                     success, msg_text = send_gmail_alert(
@@ -266,31 +289,65 @@ if ticker:
                         st.success(f"📧 **Gmail Alert Sent!** สัญญาณถูกส่งไปยัง {receiver_email} เรียบร้อยแล้ว")
                     else:
                         st.warning(f"⚠️ **Email Warning:** {msg_text}")
+
+            # --- TABS LAYOUT ---
+            tab1, tab2 = st.tabs(["📊 Technical & Golden Zone", "📰 News & Sentiment Analysis"])
+
+            # TAB 1: TECHNICAL ANALYSIS
+            with tab1:
+                fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
+                
+                fig.add_trace(go.Candlestick(
+                    x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
+                    increasing_line_color='#00FF00', decreasing_line_color='#FF5252', name="Price"
+                ), row=1, col=1)
+
+                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], line=dict(color='#00E5FF', width=1), name='EMA 20'), row=1, col=1)
+                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='#FFEA00', width=1), name='EMA 50'), row=1, col=1)
+
+                fig.add_hrect(
+                    y0=res['gz_min'], y1=res['gz_max'], fillcolor="#008000", opacity=0.25,
+                    line_color="#00FF00", line_width=1, line_dash="dash", row=1, col=1
+                )
+
+                fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#00FF00', width=1.5), name='RSI'), row=2, col=1)
+                fig.add_hline(y=70, line_dash="dash", line_color="#FF5252", row=2, col=1)
+                fig.add_hline(y=30, line_dash="dash", line_color="#00FF00", row=2, col=1)
+
+                fig.update_layout(
+                    template="plotly_dark", paper_bgcolor='#0B0E11', plot_bgcolor='#12161C',
+                    height=600, margin=dict(l=20, r=20, t=30, b=20), xaxis_rangeslider_visible=False
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            # TAB 2: NEWS & SENTIMENT ANALYSIS (ดึงกลับมาเรียบร้อย)
+            with tab2:
+                st.markdown("### 📰 Latest Market News & NLP Sentiment")
+                news_df = scrape_news_sentiment(ticker)
+                
+                if news_df.empty:
+                    st.info("ไม่พบข่าวล่าสุดหรือเกิดข้อผิดพลาดในการดึงข้อมูลข่าวสาร")
                 else:
-                    st.info("💡 **Gmail Alert Info:** เปิดใช้งานแจ้งเตือนแล้ว แต่ยังไม่ได้กรอกข้อมูล Gmail ใน Sidebar")
+                    avg_sentiment = news_df['Sentiment Score'].mean()
+                    
+                    if avg_sentiment >= 0.05:
+                        overall_str = "OVERALL BULLISH 🟢"
+                    elif avg_sentiment <= -0.05:
+                        overall_str = "OVERALL BEARISH 🔴"
+                    else:
+                        overall_str = "NEUTRAL ⚪"
 
-            # --- PLOT CHART ---
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
-            
-            fig.add_trace(go.Candlestick(
-                x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-                increasing_line_color='#00FF00', decreasing_line_color='#FF5252', name="Price"
-            ), row=1, col=1)
-
-            fig.add_trace(go.Scatter(x=df.index, y=df['EMA_20'], line=dict(color='#00E5FF', width=1), name='EMA 20'), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='#FFEA00', width=1), name='EMA 50'), row=1, col=1)
-
-            fig.add_hrect(
-                y0=res['gz_min'], y1=res['gz_max'], fillcolor="#008000", opacity=0.25,
-                line_color="#00FF00", line_width=1, line_dash="dash", row=1, col=1
-            )
-
-            fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#00FF00', width=1.5), name='RSI'), row=2, col=1)
-            fig.add_hline(y=70, line_dash="dash", line_color="#FF5252", row=2, col=1)
-            fig.add_hline(y=30, line_dash="dash", line_color="#00FF00", row=2, col=1)
-
-            fig.update_layout(
-                template="plotly_dark", paper_bgcolor='#0B0E11', plot_bgcolor='#12161C',
-                height=600, margin=dict(l=20, r=20, t=30, b=20), xaxis_rangeslider_visible=False
-            )
-            st.plotly_chart(fig, use_container_width=True)
+                    st.markdown(f"**Overall News Sentiment Score:** `<span class='emerald-accent'>{avg_sentiment:.3f}</span>` → **{overall_str}**", unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    st.dataframe(
+                        news_df,
+                        column_config={
+                            "Time": st.column_config.TextColumn("Time/Date", width="small"),
+                            "Headline": st.column_config.TextColumn("News Headline", width="large"),
+                            "Sentiment Score": st.column_config.NumberColumn("Score", format="%.3f"),
+                            "Sentiment": st.column_config.TextColumn("Sentiment", width="small"),
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
