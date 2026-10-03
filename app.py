@@ -19,7 +19,7 @@ init_nltk()
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(
     page_title="Emerald Stock & Sentiment Analyzer",
-    page_icon="📈",
+    page_icon="",
     layout="wide"
 )
 
@@ -197,7 +197,7 @@ peak_prominence = st.sidebar.slider("Peak Prominence", min_value=1, max_value=10
 analyze_btn = st.sidebar.button("RUN ANALYSIS")
 
 # --- 5. MAIN HEADER ---
-st.markdown("<h1>📈 EMERALD <span class='emerald-accent'>STOCK ANALYZER</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>EMERALD <span class='emerald-accent'>STOCK ANALYZER</span></h1>", unsafe_allow_html=True)
 st.markdown("<p style='color: #8B949E;'>Automated Fibonacci Golden Zone, Support/Resistance & News Sentiment</p>", unsafe_allow_html=True)
 
 if ticker:
@@ -219,7 +219,7 @@ if ticker:
             st.markdown("<br>", unsafe_allow_html=True)
 
             # --- TABS LAYOUT ---
-            tab1, tab2 = st.tabs(["📊 Technical & Golden Zone", "📰 News & Sentiment Analysis"])
+            tab1, tab2 = st.tabs(["Technical & Golden Zone", "News & Sentiment Analysis"])
 
             # TAB 1: TECHNICAL ANALYSIS
             with tab1:
