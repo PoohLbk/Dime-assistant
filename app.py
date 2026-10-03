@@ -96,10 +96,11 @@ st.markdown(custom_css, unsafe_allow_html=True)
 
 # --- 3. HELPER FUNCTIONS ---
 
-@st.cache_data(ttl=3600)
-def fetch_stock_data_and_analyze(ticker_symbol: str, period="6mo", distance=10, prominence=2):
-    """ ดึงราคาหุ้น และคำนวณ Swing High/Low + Golden Zone ด้วย find_peaks """
-    df = yf.download(ticker_symbol, period=period)
+@st.cache_data(ttl=600)
+def fetch_stock_data_and_analyze(ticker_symbol: str, period="6mo", interval="1d", distance=10, prominence=2):
+    """ ดึงราคาหุ้นตาม Period และ Interval แล้วคำนวณ Swing High/Low + Golden Zone ด้วย find_peaks """
+    df = yf.download(ticker_symbol, period=period, interval=interval)
+    
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     
@@ -181,17 +182,37 @@ def scrape_news_sentiment(ticker_symbol: str):
                 })
                 
         return pd.DataFrame(parsed_news)
-    except Exception as e:
+    except Exception:
         return pd.DataFrame()
 
 
 # --- 4. SIDEBAR CONTROL ---
 st.sidebar.markdown("<h2 style='color: #00FF00;'>⚡ CONTROL PANEL</h2>", unsafe_allow_html=True)
 ticker = st.sidebar.text_input("SYMBOL (e.g. NVDA, AAPL, TSLA)", value="NVDA").upper()
-period = st.sidebar.selectbox("TIMEFRAME", ["3mo", "6mo", "1y", "2y"], index=1)
+
+# เลือก Timeframe (Interval)
+interval = st.sidebar.selectbox(
+    "TIMEFRAME (Interval)", 
+    ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"], 
+    index=4  # Default: 1d
+)
+
+# ปรับช่วงเวลาย้อนหลัง (Lookback Period) ตามข้อจำกัดของ yfinance ในแต่ละ Interval
+if interval == "1m":
+    period_options = ["1d", "5d", "7d"]
+    default_p = 0
+elif interval in ["5m", "15m", "1h"]:
+    period_options = ["1d", "5d", "1mo", "60d"]
+    default_p = 2
+else:
+    period_options = ["1mo", "3mo", "6mo", "1y", "2y", "5y", "max"]
+    default_p = 2
+
+period = st.sidebar.selectbox("LOOKBACK PERIOD", period_options, index=default_p)
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("<h4 style='color: #8B949E;'>Peak Detection Settings</h4>", unsafe_allow_html=True)
-peak_distance = st.sidebar.slider("Min Peak Distance (Bars)", min_value=5, max_value=30, value=10)
+peak_distance = st.sidebar.slider("Min Peak Distance (Bars)", min_value=3, max_value=50, value=10)
 peak_prominence = st.sidebar.slider("Peak Prominence", min_value=1, max_value=10, value=2)
 
 analyze_btn = st.sidebar.button("RUN ANALYSIS")
@@ -201,20 +222,20 @@ st.markdown("<h1>EMERALD <span class='emerald-accent'>STOCK ANALYZER</span></h1>
 st.markdown("<p style='color: #8B949E;'>Automated Fibonacci Golden Zone, Support/Resistance & News Sentiment</p>", unsafe_allow_html=True)
 
 if ticker:
-    with st.spinner(f"Analyzing {ticker}..."):
+    with st.spinner(f"Analyzing {ticker} [{interval} timeframe]..."):
         df, peaks_high, peaks_low, fib_levels, current_price, in_gz, is_uptrend = fetch_stock_data_and_analyze(
-            ticker, period=period, distance=peak_distance, prominence=peak_prominence
+            ticker, period=period, interval=interval, distance=peak_distance, prominence=peak_prominence
         )
         
         if df is None or df.empty:
-            st.error(f"ไม่พบข้อมูลสำหรับหุ้นสัญลักษณ์: {ticker}")
+            st.error(f"ไม่พบข้อมูลสำหรับหุ้นสัญลักษณ์ {ticker} ในเงื่อนไข Timeframe {interval} / Period {period}")
         else:
             # --- TOP METRIC CARDS ---
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("CURRENT PRICE", f"${current_price:.2f}")
             col2.metric("MARKET TREND", "UPTREND (Retracement)" if is_uptrend else "DOWNTREND (Bounce)")
             col3.metric("GOLDEN ZONE", f"${min(fib_levels['Golden Zone Bottom'], fib_levels['Golden Zone Top']):.2f} -${max(fib_levels['Golden Zone Bottom'], fib_levels['Golden Zone Top']):.2f}")
-            col4.metric("STATUS", "IN ZONE 🎯" if in_gz else "OUTSIDE ZONE")
+            col4.metric("STATUS", "IN ZONE " if in_gz else "OUTSIDE ZONE")
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -253,7 +274,7 @@ if ticker:
                     y0=gz_min, y1=gz_max,
                     fillcolor="#008000", opacity=0.25,
                     line_color="#00FF00", line_width=1, line_dash="dash",
-                    annotation_text="GOLDEN ZONE (50.0% - 61.8%)",
+                    annotation_text=f"GOLDEN ZONE ({interval})",
                     annotation_position="top left",
                     annotation_font_color="#00FF00"
                 )
