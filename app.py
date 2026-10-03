@@ -22,7 +22,7 @@ init_nltk()
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(
     page_title="Emerald Advanced Analytics & News Sentiment",
-    page_icon="📈",
+    page_icon="",
     layout="wide"
 )
 
@@ -248,7 +248,7 @@ analyze_btn = st.sidebar.button("RUN ANALYSIS")
 
 
 # --- 5. MAIN CONTENT ---
-st.markdown("<h1>📈 EMERALD <span class='emerald-accent'>STOCK ANALYZER</span></h1>", unsafe_allow_html=True)
+st.markdown("<h1>EMERALD <span class='emerald-accent'>STOCK ANALYZER</span></h1>", unsafe_allow_html=True)
 
 if ticker:
     with st.spinner(f"Analyzing {ticker}..."):
@@ -291,7 +291,7 @@ if ticker:
                         st.warning(f" **Email Warning:** {msg_text}")
 
             # --- TABS LAYOUT ---
-            tab1, tab2 = st.tabs(["📊 Technical & Golden Zone", "📰 News & Sentiment Analysis"])
+            tab1, tab2 = st.tabs(["Technical & Golden Zone", "News & Sentiment Analysis"])
 
             # TAB 1: TECHNICAL ANALYSIS
             with tab1:
