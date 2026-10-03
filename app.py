@@ -262,7 +262,7 @@ if ticker:
             c1.metric("PRICE", f"${res['current_price']:.2f}")
             c2.metric("RSI (14)", f"{res['current_rsi']:.1f}")
             c3.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} -${res['gz_max']:.2f}")
-            c4.metric("GZ STATUS", "IN ZONE 🎯" if res['in_gz'] else "OUTSIDE ZONE")
+            c4.metric("GZ STATUS", "IN ZONE " if res['in_gz'] else "OUTSIDE ZONE")
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -286,9 +286,9 @@ if ticker:
                         bullish_signals, res['gz_min'], res['gz_max']
                     )
                     if success:
-                        st.success(f"📧 **Gmail Alert Sent!** สัญญาณถูกส่งไปยัง {receiver_email} เรียบร้อยแล้ว")
+                        st.success(f" **Gmail Alert Sent!** สัญญาณถูกส่งไปยัง {receiver_email} เรียบร้อยแล้ว")
                     else:
-                        st.warning(f"⚠️ **Email Warning:** {msg_text}")
+                        st.warning(f" **Email Warning:** {msg_text}")
 
             # --- TABS LAYOUT ---
             tab1, tab2 = st.tabs(["📊 Technical & Golden Zone", "📰 News & Sentiment Analysis"])
