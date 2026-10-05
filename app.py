@@ -38,7 +38,7 @@ init_nltk()
 # --- 2. SET PAGE CONFIG & CUSTOM CSS ---
 st.set_page_config(
     page_title="Emerald Ultimate Real-Time Analytics",
-    page_icon="📈",
+    page_icon="",
     layout="wide",
 )
 
@@ -330,7 +330,7 @@ st.sidebar.markdown("<h2 style='color: #00FF00;'>⚡ CONTROL PANEL</h2>", unsafe
 
 # 1. ฝัง Twelve Data API Key
 twelve_api_key = st.sidebar.text_input(
-    "🔑 Twelve Data API Key",
+    " Twelve Data API Key",
     value="33104e4fbd5c4cec84f310c5afb7a32b",  # <--- วาง API Key ของคุณที่นี่
     type="password"
 )
@@ -339,7 +339,7 @@ ticker = st.sidebar.text_input("SYMBOL (e.g. XAU/USD, NVDA, BTC/USD)", value="XA
 interval = st.sidebar.selectbox("TIMEFRAME", ["1min", "5min", "15min", "45min", "1h", "2h", "1day"], index=4)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("<h4 style='color: #8B949E;'>📧 Gmail Alert Settings</h4>", unsafe_allow_html=True)
+st.sidebar.markdown("<h4 style='color: #8B949E;'> Gmail Alert Settings</h4>", unsafe_allow_html=True)
 
 # 2. ฝัง ข้อมูล Gmail สำหรับส่งแจ้งเตือน
 sender_email = st.sidebar.text_input("Sender Gmail", value="อีเมลผู้ส่ง@gmail.com")
@@ -354,7 +354,7 @@ st.markdown(
 
 if not twelve_api_key:
   st.warning(
-      "👈 กรุณากรอก **Twelve Data API Key** ใน Sidebar เพื่อเริ่มต้นใช้งานข้อมูลราคา"
+      " กรุณากรอก **Twelve Data API Key** ใน Sidebar เพื่อเริ่มต้นใช้งานข้อมูลราคา"
       " Real-time ฟรีจาก Twelve Data"
   )
 else:
@@ -378,7 +378,7 @@ else:
       c3.metric(
           "GOLDEN ZONE", f"${res['gz_min']:.2f} -${res['gz_max']:.2f}"
       )
-      c4.metric("GZ STATUS", "IN ZONE 🎯" if res["in_gz"] else "OUTSIDE ZONE")
+      c4.metric("GZ STATUS", "IN ZONE " if res["in_gz"] else "OUTSIDE ZONE")
 
       st.markdown("<br>", unsafe_allow_html=True)
 
@@ -411,13 +411,13 @@ else:
               res["gz_max"],
           )
           if success:
-            st.success(f"📧 **Gmail Alert Sent!** ส่งแจ้งเตือนแล้ว")
+            st.success(f" **Gmail Alert Sent!** ส่งแจ้งเตือนแล้ว")
           else:
             st.warning(f"⚠ **Email Warning:** {msg_text}")
 
       # TABS LAYOUT
       tab1, tab2 = st.tabs(
-          ["📊 Real-Time Technical & Golden Zone", "📰 News FinBERT Sentiment"]
+          [" Real-Time Technical & Golden Zone", " News FinBERT Sentiment"]
       )
 
       # TAB 1: TECHNICAL ANALYSIS CHART
