@@ -326,43 +326,26 @@ def scrape_news_finbert(ticker_symbol: str):
 
 
 # --- 6. SIDEBAR CONTROL ---
-st.sidebar.markdown(
-    "<h2 style='color: #00FF00;'>⚡ CONTROL PANEL</h2>", unsafe_allow_html=True
-)
+st.sidebar.markdown("<h2 style='color: #00FF00;'>⚡ CONTROL PANEL</h2>", unsafe_allow_html=True)
 
+# 1. ฝัง Twelve Data API Key
 twelve_api_key = st.sidebar.text_input(
     "🔑 Twelve Data API Key",
-    type="password",
-    placeholder="วาง API Key จาก twelvedata.com ที่นี่",
+    value="33104e4fbd5c4cec84f310c5afb7a32b",  # <--- วาง API Key ของคุณที่นี่
+    type="password"
 )
 
-ticker = st.sidebar.text_input(
-    "SYMBOL (e.g. XAU/USD, NVDA, BTC/USD)", value="XAU/USD"
-).upper()
-interval = st.sidebar.selectbox(
-    "TIMEFRAME", ["1min", "5min", "15min", "45min", "1h", "2h", "1day"], index=4
-)
+ticker = st.sidebar.text_input("SYMBOL (e.g. XAU/USD, NVDA, BTC/USD)", value="XAU/USD").upper()
+interval = st.sidebar.selectbox("TIMEFRAME", ["1min", "5min", "15min", "45min", "1h", "2h", "1day"], index=4)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown(
-    "<h4 style='color: #8B949E;'>📧 Gmail Alert Settings</h4>",
-    unsafe_allow_html=True,
-)
-sender_email = st.sidebar.text_input(
-    "Sender Gmail", placeholder="your_email@gmail.com"
-)
-app_password = st.sidebar.text_input(
-    "App Password (16-digits)", type="password"
-)
-receiver_email = st.sidebar.text_input(
-    "Receiver Email", placeholder="receive_email@gmail.com"
-)
+st.sidebar.markdown("<h4 style='color: #8B949E;'>📧 Gmail Alert Settings</h4>", unsafe_allow_html=True)
+
+# 2. ฝัง ข้อมูล Gmail สำหรับส่งแจ้งเตือน
+sender_email = st.sidebar.text_input("Sender Gmail", value="อีเมลผู้ส่ง@gmail.com")
+app_password = st.sidebar.text_input("App Password (16-digits)", value="รหัสผ่านแอป16หลัก", type="password")
+receiver_email = st.sidebar.text_input("Receiver Email", value="อีเมลผู้รับ@gmail.com")
 enable_email_alert = st.sidebar.checkbox("Enable Gmail Alert", value=True)
-
-st.sidebar.markdown("---")
-analyze_btn = st.sidebar.button("RUN REAL-TIME ANALYSIS")
-
-
 # --- 7. MAIN CONTENT ---
 st.markdown(
     "<h1>📈 EMERALD <span class='emerald-accent'>REAL-TIME ANALYTICS</span></h1>",
