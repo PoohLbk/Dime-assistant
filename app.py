@@ -119,9 +119,32 @@ def fetch_and_analyze(
   if df.empty:
     return None, {}
 
+  # ระบบการคำนวณ DIVIDEND YIELD แบบอัจฉริยะ (แก้ปัญหา 0.00%)
+  dividend_yield_pct = 0.0
   try:
-    div_yield = ticker_obj.info.get("dividendYield", 0.0)
-    dividend_yield_pct = (div_yield * 100) if div_yield else 0.0
+    info = ticker_obj.info
+    div_yield = info.get("dividendYield")
+
+    if div_yield is None:
+      div_yield = info.get("yield")
+
+    if div_yield is not None:
+      dividend_yield_pct = (
+          div_yield * 100 if div_yield < 1 else float(div_yield)
+      )
+    else:
+      divs = ticker_obj.dividends
+      if not divs.empty:
+        one_year_ago = pd.Timestamp.now(tz=divs.index.tz) - pd.Timedelta(
+            days=365
+        )
+        last_year_divs = divs[divs.index >= one_year_ago].sum()
+        current_price = df["Close"].iloc[-1]
+        dividend_yield_pct = (
+            (last_year_divs / current_price) * 100
+            if current_price > 0
+            else 0.0
+        )
   except Exception:
     dividend_yield_pct = 0.0
 
@@ -431,7 +454,7 @@ st.sidebar.markdown(
 )
 
 ticker = st.sidebar.text_input(
-    "SYMBOL (e.g. NVDA, GC=F, PLTR, WDC)", value="PLTR"
+    "SYMBOL (e.g. NVDA, GC=F, PLTR, WDC, MU)", value="MU"
 ).upper()
 interval = st.sidebar.selectbox(
     "TIMEFRAME", ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"], index=4
@@ -681,6 +704,7 @@ with st.spinner(f"Analyzing {ticker}..."):
           "NFLX",
           "WDC",
           "PLTR",
+          "MU",
       ]
 
       if col_s2.button("START MARKET SCAN"):
