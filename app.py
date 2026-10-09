@@ -1,6 +1,8 @@
+from datetime import datetime
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import xml.etree.ElementTree as ET
 
 from bs4 import BeautifulSoup
 import nltk
@@ -91,7 +93,7 @@ def detect_divergence(df, peaks_high, peaks_low):
   return divergence_signals
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def fetch_and_analyze(
     ticker_symbol: str,
     period="6mo",
@@ -111,25 +113,17 @@ def fetch_and_analyze(
       ticker_symbol.upper().strip(), ticker_symbol.upper().strip()
   )
 
-  yf_obj = yf.Ticker(clean_symbol)
-  df = yf_obj.history(period=period, interval=interval)
+  ticker_obj = yf.Ticker(clean_symbol)
+  df = ticker_obj.history(period=period, interval=interval)
 
   if df.empty:
-    return None, {}, "N/A"
+    return None, {}
 
-  # ดึงข้อมูล Dividend Yield
   try:
-    info = yf_obj.info
-    div_yield_val = info.get("dividendYield", None)
-    if div_yield_val is not None and div_yield_val > 0:
-      dividend_yield_str = f"{div_yield_val * 100:.2f}%"
-    else:
-      dividend_yield_str = "N/A (0.00%)"
+    div_yield = ticker_obj.info.get("dividendYield", 0.0)
+    dividend_yield_pct = (div_yield * 100) if div_yield else 0.0
   except Exception:
-    dividend_yield_str = "N/A"
-
-  if isinstance(df.columns, pd.MultiIndex):
-    df.columns = df.columns.get_level_values(0)
+    dividend_yield_pct = 0.0
 
   df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
   df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
@@ -174,6 +168,7 @@ def fetch_and_analyze(
   analysis_results = {
       "current_price": current_price,
       "current_rsi": current_rsi,
+      "dividend_yield": dividend_yield_pct,
       "is_uptrend": is_uptrend,
       "in_gz": in_gz,
       "gz_min": min(gz_top, gz_bottom),
@@ -184,7 +179,7 @@ def fetch_and_analyze(
       "peaks_low": peaks_low,
   }
 
-  return df, analysis_results, dividend_yield_str
+  return df, analysis_results
 
 
 def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
@@ -202,8 +197,7 @@ def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
     progress_bar.progress((idx + 1) / total)
 
     try:
-      yf_obj = yf.Ticker(symbol)
-      df = yf_obj.history(period=period, interval=interval)
+      df = yf.download(symbol, period=period, interval=interval, progress=False)
       if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
@@ -270,7 +264,7 @@ def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
   return pd.DataFrame(results)
 
 
-# --- 4. GMAIL ALERT & REAL-TIME NEWS SCRAPER ---
+# --- 4. GMAIL ALERT & REAL-TIME MONTHLY NEWS SCRAPER ---
 
 
 def send_gmail_alert(
@@ -331,61 +325,104 @@ def send_gmail_alert(
     return False, f"เกิดข้อผิดพลาด: {str(e)}"
 
 
-@st.cache_data(ttl=60)  # ดึงข่าวสดใหม่ทุก 1 นาที
-def fetch_realtime_news(ticker_symbol: str):
+@st.cache_data(ttl=60)
+def scrape_news_vader(ticker_symbol: str):
   ticker_map = {
-      "XAUUSD": "GC=F",
-      "XAU/USD": "GC=F",
-      "GOLD": "GC=F",
-      "SILVER": "SI=F",
-      "BTCUSD": "BTC-USD",
-      "ETHUSD": "ETH-USD",
+      "GC=F": "Gold market",
+      "XAUUSD": "Gold market",
+      "XAU/USD": "Gold market",
+      "SI=F": "Silver market",
+      "BTC-USD": "Bitcoin",
+      "ETH-USD": "Ethereum",
   }
-  clean_symbol = ticker_map.get(
-      ticker_symbol.upper().strip(), ticker_symbol.upper().strip()
-  )
+  search_term = ticker_map.get(ticker_symbol.upper().strip(), ticker_symbol)
 
+  sia = SentimentIntensityAnalyzer()
+  parsed_news = []
+
+  # 1. Google News RSS Feed (ข่าวสด + ย้อนหลัง 30 วัน)
   try:
-    yf_obj = yf.Ticker(clean_symbol)
-    news_items = yf_obj.news
-
-    if not news_items:
-      return pd.DataFrame()
-
-    sia = SentimentIntensityAnalyzer()
-    parsed_news = []
-
-    for item in news_items[:10]:
-      title = item.get("title", "")
-      publisher = item.get("publisher", "")
-
-      # แปลง Timestamp เป็นเวลา
-      pub_time = item.get("providerPublishTime", None)
-      if pub_time:
-        time_str = pd.to_datetime(pub_time, unit="s").strftime(
-            "%Y-%m-%d %H:%M"
+    rss_url = f"https://news.google.com/rss/search?q={search_term}+stock+when:30d&hl=en-US&gl=US&ceid=US:en"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-      else:
-        time_str = "Recently"
+    }
+    res = requests.get(rss_url, headers=headers, timeout=5)
 
-      score = sia.polarity_scores(title)["compound"]
-      sentiment = (
-          "BULLISH"
-          if score >= 0.05
-          else ("BEARISH" if score <= -0.05 else "NEUTRAL")
-      )
+    if res.status_code == 200:
+      root = ET.fromstring(res.content)
+      for item in root.findall(".//item")[:30]:
+        title = item.find("title").text
+        clean_title = (
+            title.rsplit(" - ", 1)[0] if " - " in title else title
+        )
 
-      parsed_news.append({
-          "Time (UTC)": time_str,
-          "Source": publisher,
-          "Headline": title,
-          "Sentiment": sentiment,
-          "Score": round(score, 4),
-      })
+        raw_date = item.find("pubDate").text
+        try:
+          dt = datetime.strptime(raw_date[5:25], "%d %b %Y %H:%M:%S")
+          formatted_time = dt.strftime("%b-%d %I:%M%p")
+        except Exception:
+          formatted_time = raw_date[5:22]
 
-    return pd.DataFrame(parsed_news)
+        score = sia.polarity_scores(clean_title)["compound"]
+        sentiment = (
+            "BULLISH"
+            if score >= 0.05
+            else ("BEARISH" if score <= -0.05 else "NEUTRAL")
+        )
+
+        parsed_news.append({
+            "Time": formatted_time,
+            "Headline": clean_title,
+            "Sentiment": sentiment,
+            "Score": score,
+        })
+
+      if parsed_news:
+        return pd.DataFrame(parsed_news)
   except Exception:
-    return pd.DataFrame()
+    pass
+
+  # 2. Finviz Fallback
+  try:
+    finviz_term = "GOLD" if "Gold" in search_term else search_term
+    url = f"https://finviz.com/quote.ashx?t={finviz_term}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        )
+    }
+    response = requests.get(url, headers=headers, timeout=4)
+
+    if response.status_code == 200:
+      soup = BeautifulSoup(response.text, "html.parser")
+      news_table = soup.find(id="news-table")
+
+      if news_table:
+        for row in news_table.find_all("tr")[:20]:
+          if row.a:
+            title = row.a.text.strip()
+            time_str = row.td.text.strip()
+            score = sia.polarity_scores(title)["compound"]
+            sentiment = (
+                "BULLISH"
+                if score >= 0.05
+                else ("BEARISH" if score <= -0.05 else "NEUTRAL")
+            )
+
+            parsed_news.append({
+                "Time": time_str,
+                "Headline": title,
+                "Sentiment": sentiment,
+                "Score": score,
+            })
+
+        return pd.DataFrame(parsed_news)
+  except Exception:
+    pass
+
+  return pd.DataFrame()
 
 
 # --- 5. SIDEBAR CONTROL ---
@@ -394,7 +431,7 @@ st.sidebar.markdown(
 )
 
 ticker = st.sidebar.text_input(
-    "SYMBOL (e.g. PLTR, NVDA, GC=F)", value="PLTR"
+    "SYMBOL (e.g. NVDA, GC=F, PLTR, WDC)", value="PLTR"
 ).upper()
 interval = st.sidebar.selectbox(
     "TIMEFRAME", ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"], index=4
@@ -436,16 +473,19 @@ st.markdown(
 )
 
 with st.spinner(f"Analyzing {ticker}..."):
-  df, res, div_yield = fetch_and_analyze(ticker, period=period, interval=interval)
+  df, res = fetch_and_analyze(ticker, period=period, interval=interval)
 
   if df is None or df.empty:
-    st.error(f"ไม่พบข้อมูลสำหรับสัญลักษณ์ {ticker}")
+    st.error(
+        f"ไม่พบข้อมูลสำหรับสัญลักษณ์ {ticker} (หากต้องการดูราคาทองคำ"
+        " ให้พิมพ์ GC=F หรือ XAUUSD)"
+    )
   else:
-    # METRICS BAR (เพิ่ม DIVIDEND YIELD)
+    # METRICS BAR
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("PRICE", f"\${res['current_price']:.2f}")
     c2.metric("RSI (14)", f"{res['current_rsi']:.1f}")
-    c3.metric("DIV YIELD", div_yield)
+    c3.metric("DIV YIELD", f"{res['dividend_yield']:.2f}%")
     c4.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} -${res['gz_max']:.2f}")
     c5.metric("GZ STATUS", "IN ZONE" if res["in_gz"] else "OUTSIDE ZONE")
 
@@ -487,7 +527,7 @@ with st.spinner(f"Analyzing {ticker}..."):
     # TABS LAYOUT
     tab1, tab2, tab3 = st.tabs([
         "Technical Analysis & Golden Zone",
-        "Real-Time News & Sentiment",
+        "News Sentiment Analysis",
         "Auto Market Screener",
     ])
 
@@ -572,10 +612,10 @@ with st.spinner(f"Analyzing {ticker}..."):
       )
       st.plotly_chart(fig, use_container_width=True)
 
-    # TAB 2: REAL-TIME NEWS & SENTIMENT
+    # TAB 2: REAL-TIME MONTHLY NEWS SENTIMENT
     with tab2:
-      st.markdown("### Real-Time Live News & Sentiment Analysis")
-      news_df = fetch_realtime_news(ticker)
+      st.markdown("### Real-Time Market News Sentiment (Past 30 Days)")
+      news_df = scrape_news_vader(ticker)
 
       if news_df.empty:
         st.info("ไม่พบข่าวล่าสุดหรือเกิดข้อผิดพลาดในการดึงข้อมูลข่าวสาร")
@@ -588,7 +628,7 @@ with st.spinner(f"Analyzing {ticker}..."):
         )
 
         st.markdown(
-            f"**Overall Sentiment Score:** <span"
+            f"Overall Sentiment Score: <span"
             f" class='emerald-accent'>{avg_score:.3f}</span> →"
             f" **{overall_str}**",
             unsafe_allow_html=True,
@@ -639,6 +679,8 @@ with st.spinner(f"Analyzing {ticker}..."):
           "AVGO",
           "AMD",
           "NFLX",
+          "WDC",
+          "PLTR",
       ]
 
       if col_s2.button("START MARKET SCAN"):
