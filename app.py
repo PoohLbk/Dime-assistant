@@ -91,7 +91,7 @@ def detect_divergence(df, peaks_high, peaks_low):
   return divergence_signals
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=120)
 def fetch_and_analyze(
     ticker_symbol: str,
     period="6mo",
@@ -99,7 +99,6 @@ def fetch_and_analyze(
     distance=10,
     prominence=2,
 ):
-  # Ticker Mapper
   ticker_map = {
       "XAUUSD": "GC=F",
       "XAU/USD": "GC=F",
@@ -112,12 +111,25 @@ def fetch_and_analyze(
       ticker_symbol.upper().strip(), ticker_symbol.upper().strip()
   )
 
-  df = yf.download(clean_symbol, period=period, interval=interval)
-  if isinstance(df.columns, pd.MultiIndex):
-    df.columns = df.columns.get_level_values(0)
+  yf_obj = yf.Ticker(clean_symbol)
+  df = yf_obj.history(period=period, interval=interval)
 
   if df.empty:
-    return None, {}
+    return None, {}, "N/A"
+
+  # ดึงข้อมูล Dividend Yield
+  try:
+    info = yf_obj.info
+    div_yield_val = info.get("dividendYield", None)
+    if div_yield_val is not None and div_yield_val > 0:
+      dividend_yield_str = f"{div_yield_val * 100:.2f}%"
+    else:
+      dividend_yield_str = "N/A (0.00%)"
+  except Exception:
+    dividend_yield_str = "N/A"
+
+  if isinstance(df.columns, pd.MultiIndex):
+    df.columns = df.columns.get_level_values(0)
 
   df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
   df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
@@ -172,7 +184,7 @@ def fetch_and_analyze(
       "peaks_low": peaks_low,
   }
 
-  return df, analysis_results
+  return df, analysis_results, dividend_yield_str
 
 
 def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
@@ -190,7 +202,8 @@ def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
     progress_bar.progress((idx + 1) / total)
 
     try:
-      df = yf.download(symbol, period=period, interval=interval, progress=False)
+      yf_obj = yf.Ticker(symbol)
+      df = yf_obj.history(period=period, interval=interval)
       if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
@@ -236,7 +249,7 @@ def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
       if in_gz:
         results.append({
             "Symbol": symbol,
-            "Price ($/฿)": round(current_price, 2),
+            "Price (\$/฿)": round(current_price, 2),
             "Golden Zone Min": round(gz_min, 2),
             "Golden Zone Max": round(gz_max, 2),
             "Trend": (
@@ -257,7 +270,7 @@ def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
   return pd.DataFrame(results)
 
 
-# --- 4. GMAIL ALERT & SCRAPER ---
+# --- 4. GMAIL ALERT & REAL-TIME NEWS SCRAPER ---
 
 
 def send_gmail_alert(
@@ -274,7 +287,7 @@ def send_gmail_alert(
   if not sender_email or not app_password or not receiver_email or not signals:
     return False, "กรุณากรอกข้อมูล Gmail ให้ครบถ้วน"
 
-  subject = f"EMERALD BUY ALERT: {ticker} (${current_price:.2f})"
+  subject = f"EMERALD BUY ALERT: {ticker} (\${current_price:.2f})"
   signals_html = "".join(
       [f"<li style='padding: 4px 0; color: #00FF00;'><b>{s}</b></li>" for s in signals]
   )
@@ -288,7 +301,7 @@ def send_gmail_alert(
             <hr style="border: 0.5px solid #1E232A;">
             <table style="width: 100%; margin: 15px 0; font-size: 14px;">
                 <tr><td style="color: #8B949E;">Symbol:</td><td style="color: #FFFFFF; font-weight: bold;">{ticker}</td></tr>
-                <tr><td style="color: #8B949E;">Last Price:</td><td style="color: #00FF00; font-weight: bold;">${current_price:.2f}</td></tr>
+                <tr><td style="color: #8B949E;">Last Price:</td><td style="color: #00FF00; font-weight: bold;">\${current_price:.2f}</td></tr>
                 <tr><td style="color: #8B949E;">Timeframe:</td><td style="color: #FFFFFF;">{timeframe}</td></tr>
                 <tr><td style="color: #8B949E;">Golden Zone:</td><td style="color: #00FF00;">${gz_min:.2f} -${gz_max:.2f}</td></tr>
             </table>
@@ -318,40 +331,57 @@ def send_gmail_alert(
     return False, f"เกิดข้อผิดพลาด: {str(e)}"
 
 
-@st.cache_data(ttl=1800)
-def scrape_news_vader(ticker_symbol: str):
-  clean_symbol = "GOLD" if "XAU" in ticker_symbol.upper() else ticker_symbol
-  url = f"https://finviz.com/quote.ashx?t={clean_symbol}"
-  headers = {"User-Agent": "Mozilla/5.0"}
+@st.cache_data(ttl=60)  # ดึงข่าวสดใหม่ทุก 1 นาที
+def fetch_realtime_news(ticker_symbol: str):
+  ticker_map = {
+      "XAUUSD": "GC=F",
+      "XAU/USD": "GC=F",
+      "GOLD": "GC=F",
+      "SILVER": "SI=F",
+      "BTCUSD": "BTC-USD",
+      "ETHUSD": "ETH-USD",
+  }
+  clean_symbol = ticker_map.get(
+      ticker_symbol.upper().strip(), ticker_symbol.upper().strip()
+  )
 
   try:
-    response = requests.get(url, headers=headers, timeout=5)
-    soup = BeautifulSoup(response.text, "html.parser")
-    news_table = soup.find(id="news-table")
+    yf_obj = yf.Ticker(clean_symbol)
+    news_items = yf_obj.news
 
-    if not news_table:
+    if not news_items:
       return pd.DataFrame()
 
     sia = SentimentIntensityAnalyzer()
     parsed_news = []
 
-    for row in news_table.find_all("tr")[:10]:
-      if row.a:
-        title = row.a.text
-        time_str = row.td.text.strip()
-        score = sia.polarity_scores(title)["compound"]
-        sentiment = (
-            "BULLISH"
-            if score >= 0.05
-            else ("BEARISH" if score <= -0.05 else "NEUTRAL")
-        )
+    for item in news_items[:10]:
+      title = item.get("title", "")
+      publisher = item.get("publisher", "")
 
-        parsed_news.append({
-            "Time": time_str,
-            "Headline": title,
-            "Sentiment": sentiment,
-            "Score": score,
-        })
+      # แปลง Timestamp เป็นเวลา
+      pub_time = item.get("providerPublishTime", None)
+      if pub_time:
+        time_str = pd.to_datetime(pub_time, unit="s").strftime(
+            "%Y-%m-%d %H:%M"
+        )
+      else:
+        time_str = "Recently"
+
+      score = sia.polarity_scores(title)["compound"]
+      sentiment = (
+          "BULLISH"
+          if score >= 0.05
+          else ("BEARISH" if score <= -0.05 else "NEUTRAL")
+      )
+
+      parsed_news.append({
+          "Time (UTC)": time_str,
+          "Source": publisher,
+          "Headline": title,
+          "Sentiment": sentiment,
+          "Score": round(score, 4),
+      })
 
     return pd.DataFrame(parsed_news)
   except Exception:
@@ -364,7 +394,7 @@ st.sidebar.markdown(
 )
 
 ticker = st.sidebar.text_input(
-    "SYMBOL (e.g. NVDA, GC=F, XAUUSD)", value="GC=F"
+    "SYMBOL (e.g. PLTR, NVDA, GC=F)", value="PLTR"
 ).upper()
 interval = st.sidebar.selectbox(
     "TIMEFRAME", ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"], index=4
@@ -406,20 +436,18 @@ st.markdown(
 )
 
 with st.spinner(f"Analyzing {ticker}..."):
-  df, res = fetch_and_analyze(ticker, period=period, interval=interval)
+  df, res, div_yield = fetch_and_analyze(ticker, period=period, interval=interval)
 
   if df is None or df.empty:
-    st.error(
-        f"ไม่พบข้อมูลสำหรับสัญลักษณ์ {ticker} (หากต้องการดูราคาทองคำ"
-        " ให้พิมพ์ GC=F หรือ XAUUSD)"
-    )
+    st.error(f"ไม่พบข้อมูลสำหรับสัญลักษณ์ {ticker}")
   else:
-    # METRICS BAR
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("PRICE", f"${res['current_price']:.2f}")
+    # METRICS BAR (เพิ่ม DIVIDEND YIELD)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("PRICE", f"\${res['current_price']:.2f}")
     c2.metric("RSI (14)", f"{res['current_rsi']:.1f}")
-    c3.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} -${res['gz_max']:.2f}")
-    c4.metric("GZ STATUS", "IN ZONE" if res["in_gz"] else "OUTSIDE ZONE")
+    c3.metric("DIV YIELD", div_yield)
+    c4.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} -${res['gz_max']:.2f}")
+    c5.metric("GZ STATUS", "IN ZONE" if res["in_gz"] else "OUTSIDE ZONE")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -427,8 +455,8 @@ with st.spinner(f"Analyzing {ticker}..."):
     bullish_signals = []
     if res["in_gz"]:
       bullish_signals.append(
-          f"Price is in Golden Zone (${res['gz_min']:.2f} -"
-          f" ${res['gz_max']:.2f})"
+          f"Price is in Golden Zone (\${res['gz_min']:.2f} -"
+          f" \${res['gz_max']:.2f})"
       )
     for div in res["divergences"]:
       if "Bullish" in div:
@@ -459,7 +487,7 @@ with st.spinner(f"Analyzing {ticker}..."):
     # TABS LAYOUT
     tab1, tab2, tab3 = st.tabs([
         "Technical Analysis & Golden Zone",
-        "News Sentiment Analysis",
+        "Real-Time News & Sentiment",
         "Auto Market Screener",
     ])
 
@@ -544,10 +572,10 @@ with st.spinner(f"Analyzing {ticker}..."):
       )
       st.plotly_chart(fig, use_container_width=True)
 
-    # TAB 2: NEWS SENTIMENT
+    # TAB 2: REAL-TIME NEWS & SENTIMENT
     with tab2:
-      st.markdown("### Latest Market News Sentiment")
-      news_df = scrape_news_vader(ticker)
+      st.markdown("### Real-Time Live News & Sentiment Analysis")
+      news_df = fetch_realtime_news(ticker)
 
       if news_df.empty:
         st.info("ไม่พบข่าวล่าสุดหรือเกิดข้อผิดพลาดในการดึงข้อมูลข่าวสาร")
@@ -560,8 +588,8 @@ with st.spinner(f"Analyzing {ticker}..."):
         )
 
         st.markdown(
-            f"**Overall Sentiment Score:** `<span"
-            f" class='emerald-accent'>{avg_score:.3f}</span>` →"
+            f"**Overall Sentiment Score:** <span"
+            f" class='emerald-accent'>{avg_score:.3f}</span> →"
             f" **{overall_str}**",
             unsafe_allow_html=True,
         )
