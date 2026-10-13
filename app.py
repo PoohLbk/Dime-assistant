@@ -119,7 +119,7 @@ def fetch_and_analyze(
   if df.empty:
     return None, {}
 
-  # ระบบการคำนวณ DIVIDEND YIELD แบบอัจฉริยะ (แก้ปัญหา 0.00%)
+  # คำนวณ DIVIDEND YIELD
   dividend_yield_pct = 0.0
   try:
     info = ticker_obj.info
@@ -170,6 +170,15 @@ def fetch_and_analyze(
     gz_bottom = swing_low + (0.500 * diff)
     gz_top = swing_low + (0.618 * diff)
 
+  # --- คำนวณ DEMAND / SUPPLY ZONE ---
+  # Supply Zone (โซนแรงขายด้านบน): อ้างอิงจาก Swing High
+  supply_top = swing_high
+  supply_bottom = max(df["Open"].iloc[last_h_idx], df["Close"].iloc[last_h_idx])
+
+  # Demand Zone (โซนแรงซื้อด้านล่าง): อ้างอิงจาก Swing Low
+  demand_bottom = swing_low
+  demand_top = min(df["Open"].iloc[last_l_idx], df["Close"].iloc[last_l_idx])
+
   current_price = df["Close"].iloc[-1]
   current_rsi = df["RSI"].iloc[-1]
   in_gz = min(gz_top, gz_bottom) <= current_price <= max(gz_top, gz_bottom)
@@ -196,6 +205,10 @@ def fetch_and_analyze(
       "in_gz": in_gz,
       "gz_min": min(gz_top, gz_bottom),
       "gz_max": max(gz_top, gz_bottom),
+      "supply_top": supply_top,
+      "supply_bottom": supply_bottom,
+      "demand_top": demand_top,
+      "demand_bottom": demand_bottom,
       "ema_signal": ema_signal,
       "divergences": divergence_signals,
       "peaks_high": peaks_high,
@@ -205,89 +218,7 @@ def fetch_and_analyze(
   return df, analysis_results
 
 
-def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
-  results = []
-  progress_bar = st.progress(0)
-  status_text = st.empty()
-  total = len(ticker_list)
-
-  for idx, symbol in enumerate(ticker_list):
-    status_text.markdown(
-        f"Scanning: `<span class='emerald-accent'>{symbol}</span>`"
-        f" ({idx+1}/{total})",
-        unsafe_allow_html=True,
-    )
-    progress_bar.progress((idx + 1) / total)
-
-    try:
-      df = yf.download(symbol, period=period, interval=interval, progress=False)
-      if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-      if df.empty or len(df) < 30:
-        continue
-
-      highs, lows, close_prices = (
-          df["High"].values,
-          df["Low"].values,
-          df["Close"].values,
-      )
-      peaks_high, _ = find_peaks(highs, distance=10, prominence=2)
-      peaks_low, _ = find_peaks(-lows, distance=10, prominence=2)
-
-      last_h_idx = peaks_high[-1] if len(peaks_high) > 0 else np.argmax(highs)
-      last_l_idx = peaks_low[-1] if len(peaks_low) > 0 else np.argmin(lows)
-
-      swing_high, swing_low, current_price = (
-          highs[last_h_idx],
-          lows[last_l_idx],
-          close_prices[-1],
-      )
-      diff = swing_high - swing_low
-      is_uptrend = last_h_idx > last_l_idx
-
-      gz_top = (
-          swing_high - (0.500 * diff)
-          if is_uptrend
-          else swing_low + (0.618 * diff)
-      )
-      gz_bottom = (
-          swing_high - (0.618 * diff)
-          if is_uptrend
-          else swing_low + (0.500 * diff)
-      )
-
-      gz_min, gz_max = min(gz_top, gz_bottom), max(gz_top, gz_bottom)
-      in_gz = gz_min <= current_price <= gz_max
-
-      df["RSI"] = calculate_rsi(df["Close"])
-      rsi = df["RSI"].iloc[-1]
-
-      if in_gz:
-        results.append({
-            "Symbol": symbol,
-            "Price (\$/฿)": round(current_price, 2),
-            "Golden Zone Min": round(gz_min, 2),
-            "Golden Zone Max": round(gz_max, 2),
-            "Trend": (
-                "Uptrend (Retracement)" if is_uptrend else "Downtrend (Bounce)"
-            ),
-            "RSI (14)": round(rsi, 1),
-            "RSI Status": (
-                "Oversold"
-                if rsi <= 35
-                else ("Overbought" if rsi >= 65 else "Neutral")
-            ),
-        })
-    except Exception:
-      continue
-
-  progress_bar.empty()
-  status_text.empty()
-  return pd.DataFrame(results)
-
-
-# --- 4. GMAIL ALERT & REAL-TIME MONTHLY NEWS SCRAPER ---
+# --- 4. GMAIL ALERT & REAL-TIME NEWS SCRAPER ---
 
 
 def send_gmail_alert(
@@ -304,7 +235,7 @@ def send_gmail_alert(
   if not sender_email or not app_password or not receiver_email or not signals:
     return False, "กรุณากรอกข้อมูล Gmail ให้ครบถ้วน"
 
-  subject = f"EMERALD BUY ALERT: {ticker} (\${current_price:.2f})"
+  subject = f"EMERALD BUY ALERT: {ticker} (${current_price:.2f})"
   signals_html = "".join(
       [f"<li style='padding: 4px 0; color: #00FF00;'><b>{s}</b></li>" for s in signals]
   )
@@ -318,9 +249,9 @@ def send_gmail_alert(
             <hr style="border: 0.5px solid #1E232A;">
             <table style="width: 100%; margin: 15px 0; font-size: 14px;">
                 <tr><td style="color: #8B949E;">Symbol:</td><td style="color: #FFFFFF; font-weight: bold;">{ticker}</td></tr>
-                <tr><td style="color: #8B949E;">Last Price:</td><td style="color: #00FF00; font-weight: bold;">\${current_price:.2f}</td></tr>
+                <tr><td style="color: #8B949E;">Last Price:</td><td style="color: #00FF00; font-weight: bold;">${current_price:.2f}</td></tr>
                 <tr><td style="color: #8B949E;">Timeframe:</td><td style="color: #FFFFFF;">{timeframe}</td></tr>
-                <tr><td style="color: #8B949E;">Golden Zone:</td><td style="color: #00FF00;">${gz_min:.2f} -${gz_max:.2f}</td></tr>
+                <tr><td style="color: #8B949E;">Golden Zone:</td><td style="color: #00FF00;">${gz_min:.2f} - ${gz_max:.2f}</td></tr>
             </table>
             <h4 style="color: #FFFFFF; margin-bottom: 5px;">Signals Detected:</h4>
             <ul style="background-color: #161B22; padding: 15px 25px; border-radius: 6px; list-style-type: square;">
@@ -363,7 +294,6 @@ def scrape_news_vader(ticker_symbol: str):
   sia = SentimentIntensityAnalyzer()
   parsed_news = []
 
-  # 1. Google News RSS Feed (ข่าวสด + ย้อนหลัง 30 วัน)
   try:
     rss_url = f"https://news.google.com/rss/search?q={search_term}+stock+when:30d&hl=en-US&gl=US&ceid=US:en"
     headers = {
@@ -407,44 +337,6 @@ def scrape_news_vader(ticker_symbol: str):
   except Exception:
     pass
 
-  # 2. Finviz Fallback
-  try:
-    finviz_term = "GOLD" if "Gold" in search_term else search_term
-    url = f"https://finviz.com/quote.ashx?t={finviz_term}"
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        )
-    }
-    response = requests.get(url, headers=headers, timeout=4)
-
-    if response.status_code == 200:
-      soup = BeautifulSoup(response.text, "html.parser")
-      news_table = soup.find(id="news-table")
-
-      if news_table:
-        for row in news_table.find_all("tr")[:20]:
-          if row.a:
-            title = row.a.text.strip()
-            time_str = row.td.text.strip()
-            score = sia.polarity_scores(title)["compound"]
-            sentiment = (
-                "BULLISH"
-                if score >= 0.05
-                else ("BEARISH" if score <= -0.05 else "NEUTRAL")
-            )
-
-            parsed_news.append({
-                "Time": time_str,
-                "Headline": title,
-                "Sentiment": sentiment,
-                "Score": score,
-            })
-
-        return pd.DataFrame(parsed_news)
-  except Exception:
-    pass
-
   return pd.DataFrame()
 
 
@@ -454,7 +346,7 @@ st.sidebar.markdown(
 )
 
 ticker = st.sidebar.text_input(
-    "SYMBOL (e.g. NVDA, GC=F, PLTR, WDC, MU)", value="MU"
+    "SYMBOL (e.g. NVDA, GC=F, PLTR, WDC, MU)", value="PLTR"
 ).upper()
 interval = st.sidebar.selectbox(
     "TIMEFRAME", ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"], index=4
@@ -470,6 +362,13 @@ else:
 period = st.sidebar.selectbox(
     "LOOKBACK PERIOD", period_options, index=default_p
 )
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    "<h4 style='color: #8B949E;'>Display Settings</h4>",
+    unsafe_allow_html=True,
+)
+show_demand_supply = st.sidebar.checkbox("Show Demand / Supply Zones", value=True)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
@@ -499,59 +398,22 @@ with st.spinner(f"Analyzing {ticker}..."):
   df, res = fetch_and_analyze(ticker, period=period, interval=interval)
 
   if df is None or df.empty:
-    st.error(
-        f"ไม่พบข้อมูลสำหรับสัญลักษณ์ {ticker} (หากต้องการดูราคาทองคำ"
-        " ให้พิมพ์ GC=F หรือ XAUUSD)"
-    )
+    st.error(f"ไม่พบข้อมูลสำหรับสัญลักษณ์ {ticker}")
   else:
     # METRICS BAR
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("PRICE", f"\${res['current_price']:.2f}")
+    c1.metric("PRICE", f"${res['current_price']:.2f}")
     c2.metric("RSI (14)", f"{res['current_rsi']:.1f}")
     c3.metric("DIV YIELD", f"{res['dividend_yield']:.2f}%")
-    c4.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} -${res['gz_max']:.2f}")
+    c4.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} - ${res['gz_max']:.2f}")
     c5.metric("GZ STATUS", "IN ZONE" if res["in_gz"] else "OUTSIDE ZONE")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # GMAIL ALERT TRIGGER
-    bullish_signals = []
-    if res["in_gz"]:
-      bullish_signals.append(
-          f"Price is in Golden Zone (\${res['gz_min']:.2f} -"
-          f" \${res['gz_max']:.2f})"
-      )
-    for div in res["divergences"]:
-      if "Bullish" in div:
-        bullish_signals.append(div)
-    if "GOLDEN CROSS" in res["ema_signal"]:
-      bullish_signals.append("EMA 20 Crossed Above EMA 50 (Golden Cross)")
-    if res["current_rsi"] <= 30:
-      bullish_signals.append(f"RSI Oversold ({res['current_rsi']:.1f})")
-
-    if res["in_gz"] and len(bullish_signals) > 1 and enable_email_alert:
-      if sender_email and app_password and receiver_email:
-        success, msg_text = send_gmail_alert(
-            sender_email,
-            app_password,
-            receiver_email,
-            ticker,
-            res["current_price"],
-            interval,
-            bullish_signals,
-            res["gz_min"],
-            res["gz_max"],
-        )
-        if success:
-          st.success("Gmail Alert Sent! ส่งแจ้งเตือนสำเร็จ")
-        else:
-          st.warning(f"Email Warning: {msg_text}")
-
     # TABS LAYOUT
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2 = st.tabs([
         "Technical Analysis & Golden Zone",
         "News Sentiment Analysis",
-        "Auto Market Screener",
     ])
 
     # TAB 1: TECHNICAL ANALYSIS CHART
@@ -564,6 +426,7 @@ with st.spinner(f"Analyzing {ticker}..."):
           row_heights=[0.75, 0.25],
       )
 
+      # แท่งเทียน Candlestick
       fig.add_trace(
           go.Candlestick(
               x=df.index,
@@ -579,6 +442,7 @@ with st.spinner(f"Analyzing {ticker}..."):
           col=1,
       )
 
+      # เส้น EMA
       fig.add_trace(
           go.Scatter(
               x=df.index,
@@ -600,6 +464,7 @@ with st.spinner(f"Analyzing {ticker}..."):
           col=1,
       )
 
+      # โซน Golden Zone (แถบสีเขียวเข้ม)
       fig.add_hrect(
           y0=res["gz_min"],
           y1=res["gz_max"],
@@ -612,6 +477,39 @@ with st.spinner(f"Analyzing {ticker}..."):
           col=1,
       )
 
+      # --- วาดกล่อง DEMAND & SUPPLY ZONES ---
+      if show_demand_supply:
+        # Supply Zone (กล่องสีแดงด้านบน)
+        fig.add_hrect(
+            y0=res["supply_bottom"],
+            y1=res["supply_top"],
+            fillcolor="#FF5252",
+            opacity=0.20,
+            line_color="#FF5252",
+            line_width=1,
+            annotation_text="Supply Zone (แรงขาย)",
+            annotation_position="top left",
+            annotation_font_color="#FF5252",
+            row=1,
+            col=1,
+        )
+
+        # Demand Zone (กล่องสีเขียวนีออนด้านล่าง)
+        fig.add_hrect(
+            y0=res["demand_bottom"],
+            y1=res["demand_top"],
+            fillcolor="#00E676",
+            opacity=0.20,
+            line_color="#00E676",
+            line_width=1,
+            annotation_text="Demand Zone (แรงซื้อ)",
+            annotation_position="bottom left",
+            annotation_font_color="#00E676",
+            row=1,
+            col=1,
+        )
+
+      # RSI
       fig.add_trace(
           go.Scatter(
               x=df.index,
@@ -629,7 +527,7 @@ with st.spinner(f"Analyzing {ticker}..."):
           template="plotly_dark",
           paper_bgcolor="#0B0E11",
           plot_bgcolor="#12161C",
-          height=600,
+          height=650,
           margin=dict(l=20, r=20, t=30, b=20),
           xaxis_rangeslider_visible=False,
       )
@@ -658,66 +556,3 @@ with st.spinner(f"Analyzing {ticker}..."):
         )
         st.markdown("<br>", unsafe_allow_html=True)
         st.dataframe(news_df, hide_index=True, use_container_width=True)
-
-    # TAB 3: AUTO MARKET SCREENER
-    with tab3:
-      st.markdown("### Auto Market Golden Zone Screener")
-      st.markdown(
-          "<p style='color: #8B949E;'>สแกนหาหุ้นในตลาดที่ราคากำลังหลุดเข้าสู่"
-          " Golden Zone (50% - 61.8%) ณ ตอนนี้ทันที</p>",
-          unsafe_allow_html=True,
-      )
-
-      col_s1, col_s2 = st.columns([2, 1])
-      market_choice = col_s1.selectbox(
-          "เลือกกลุ่มหุ้นที่จะสแกน",
-          ["SET50 (หุ้นไทย)", "S&P 500 Top Tech (หุ้นอเมริกา)"],
-      )
-
-      set50_list = [
-          "ADVANC.BK",
-          "AOT.BK",
-          "BDMS.BK",
-          "BBL.BK",
-          "CPALL.BK",
-          "CPN.BK",
-          "DELTA.BK",
-          "GULF.BK",
-          "KBANK.BK",
-          "KTB.BK",
-          "PTT.BK",
-          "PTTEP.BK",
-          "SCB.BK",
-          "SCC.BK",
-          "TOP.BK",
-      ]
-      sp500_list = [
-          "NVDA",
-          "AAPL",
-          "MSFT",
-          "AMZN",
-          "GOOGL",
-          "META",
-          "TSLA",
-          "AVGO",
-          "AMD",
-          "NFLX",
-          "WDC",
-          "PLTR",
-          "MU",
-      ]
-
-      if col_s2.button("START MARKET SCAN"):
-        target_list = set50_list if "SET50" in market_choice else sp500_list
-        with st.spinner("กำลังสแกนราคาหุ้นในตลาด..."):
-          screener_df = scan_golden_zone_stocks(
-              target_list, period=period, interval=interval
-          )
-          if not screener_df.empty:
-            st.success(
-                f"สแกนเสร็จสิ้น! พบหุ้นที่อยู่ใน Golden Zone จำนวน"
-                f" {len(screener_df)} ตัว"
-            )
-            st.dataframe(screener_df, hide_index=True, use_container_width=True)
-          else:
-            st.warning("ไม่พบหุ้นที่อยู่ใน Golden Zone ณ ขณะนี้")
