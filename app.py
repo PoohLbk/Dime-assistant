@@ -287,7 +287,7 @@ def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
   return pd.DataFrame(results)
 
 
-# --- 4. GMAIL ALERT & REAL-TIME NEWS SCRAPER ---
+# --- 4. GMAIL ALERT & REAL-TIME NEWS SCRAPER (SORTED NEWEST FIRST) ---
 
 
 def send_gmail_alert(
@@ -381,9 +381,10 @@ def scrape_news_vader(ticker_symbol: str):
         )
 
         raw_date = item.find("pubDate").text
+        dt_obj = None
         try:
-          dt = datetime.strptime(raw_date[5:25], "%d %b %Y %H:%M:%S")
-          formatted_time = dt.strftime("%b-%d %I:%M%p")
+          dt_obj = datetime.strptime(raw_date[5:25], "%d %b %Y %H:%M:%S")
+          formatted_time = dt_obj.strftime("%b-%d %I:%M%p")
         except Exception:
           formatted_time = raw_date[5:22]
 
@@ -395,6 +396,7 @@ def scrape_news_vader(ticker_symbol: str):
         )
 
         parsed_news.append({
+            "dt": dt_obj if dt_obj else datetime.min,
             "Time": formatted_time,
             "Headline": clean_title,
             "Sentiment": sentiment,
@@ -402,7 +404,12 @@ def scrape_news_vader(ticker_symbol: str):
         })
 
       if parsed_news:
-        return pd.DataFrame(parsed_news)
+        df_news = pd.DataFrame(parsed_news)
+        # เรียงลำดับข่าวตามวันที่จากล่าสุดลงไปหาเก่าสุด
+        df_news = df_news.sort_values(by="dt", ascending=False).drop(
+            columns=["dt"]
+        )
+        return df_news
   except Exception:
     pass
 
@@ -597,7 +604,7 @@ with st.spinner(f"Analyzing {ticker}..."):
       )
       st.plotly_chart(fig, use_container_width=True)
 
-    # TAB 2: REAL-TIME MONTHLY NEWS SENTIMENT
+    # TAB 2: REAL-TIME MONTHLY NEWS SENTIMENT (SORTED NEWEST FIRST)
     with tab2:
       st.markdown("### Real-Time Market News Sentiment (Past 30 Days)")
       news_df = scrape_news_vader(ticker)
