@@ -119,7 +119,7 @@ def fetch_and_analyze(
   if df.empty:
     return None, {}
 
-  # คำนวณ DIVIDEND YIELD
+  # คำนวณ DIVIDEND YIELD แบบ Fallback
   dividend_yield_pct = 0.0
   try:
     info = ticker_obj.info
@@ -205,6 +205,88 @@ def fetch_and_analyze(
   return df, analysis_results
 
 
+def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
+  results = []
+  progress_bar = st.progress(0)
+  status_text = st.empty()
+  total = len(ticker_list)
+
+  for idx, symbol in enumerate(ticker_list):
+    status_text.markdown(
+        f"Scanning: `<span class='emerald-accent'>{symbol}</span>`"
+        f" ({idx+1}/{total})",
+        unsafe_allow_html=True,
+    )
+    progress_bar.progress((idx + 1) / total)
+
+    try:
+      df = yf.download(symbol, period=period, interval=interval, progress=False)
+      if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+      if df.empty or len(df) < 30:
+        continue
+
+      highs, lows, close_prices = (
+          df["High"].values,
+          df["Low"].values,
+          df["Close"].values,
+      )
+      peaks_high, _ = find_peaks(highs, distance=10, prominence=2)
+      peaks_low, _ = find_peaks(-lows, distance=10, prominence=2)
+
+      last_h_idx = peaks_high[-1] if len(peaks_high) > 0 else np.argmax(highs)
+      last_l_idx = peaks_low[-1] if len(peaks_low) > 0 else np.argmin(lows)
+
+      swing_high, swing_low, current_price = (
+          highs[last_h_idx],
+          lows[last_l_idx],
+          close_prices[-1],
+      )
+      diff = swing_high - swing_low
+      is_uptrend = last_h_idx > last_l_idx
+
+      gz_top = (
+          swing_high - (0.500 * diff)
+          if is_uptrend
+          else swing_low + (0.618 * diff)
+      )
+      gz_bottom = (
+          swing_high - (0.618 * diff)
+          if is_uptrend
+          else swing_low + (0.500 * diff)
+      )
+
+      gz_min, gz_max = min(gz_top, gz_bottom), max(gz_top, gz_bottom)
+      in_gz = gz_min <= current_price <= gz_max
+
+      df["RSI"] = calculate_rsi(df["Close"])
+      rsi = df["RSI"].iloc[-1]
+
+      if in_gz:
+        results.append({
+            "Symbol": symbol,
+            "Price (\$/฿)": round(current_price, 2),
+            "Golden Zone Min": round(gz_min, 2),
+            "Golden Zone Max": round(gz_max, 2),
+            "Trend": (
+                "Uptrend (Retracement)" if is_uptrend else "Downtrend (Bounce)"
+            ),
+            "RSI (14)": round(rsi, 1),
+            "RSI Status": (
+                "Oversold"
+                if rsi <= 35
+                else ("Overbought" if rsi >= 65 else "Neutral")
+            ),
+        })
+    except Exception:
+      continue
+
+  progress_bar.empty()
+  status_text.empty()
+  return pd.DataFrame(results)
+
+
 # --- 4. GMAIL ALERT & REAL-TIME NEWS SCRAPER ---
 
 
@@ -222,7 +304,7 @@ def send_gmail_alert(
   if not sender_email or not app_password or not receiver_email or not signals:
     return False, "กรุณากรอกข้อมูล Gmail ให้ครบถ้วน"
 
-  subject = f"EMERALD BUY ALERT: {ticker} (${current_price:.2f})"
+  subject = f"EMERALD BUY ALERT: {ticker} (\${current_price:.2f})"
   signals_html = "".join(
       [f"<li style='padding: 4px 0; color: #00FF00;'><b>{s}</b></li>" for s in signals]
   )
@@ -236,9 +318,9 @@ def send_gmail_alert(
             <hr style="border: 0.5px solid #1E232A;">
             <table style="width: 100%; margin: 15px 0; font-size: 14px;">
                 <tr><td style="color: #8B949E;">Symbol:</td><td style="color: #FFFFFF; font-weight: bold;">{ticker}</td></tr>
-                <tr><td style="color: #8B949E;">Last Price:</td><td style="color: #00FF00; font-weight: bold;">${current_price:.2f}</td></tr>
+                <tr><td style="color: #8B949E;">Last Price:</td><td style="color: #00FF00; font-weight: bold;">\${current_price:.2f}</td></tr>
                 <tr><td style="color: #8B949E;">Timeframe:</td><td style="color: #FFFFFF;">{timeframe}</td></tr>
-                <tr><td style="color: #8B949E;">Golden Zone:</td><td style="color: #00FF00;">${gz_min:.2f} - ${gz_max:.2f}</td></tr>
+                <tr><td style="color: #8B949E;">Golden Zone:</td><td style="color: #00FF00;">${gz_min:.2f} -${gz_max:.2f}</td></tr>
             </table>
             <h4 style="color: #FFFFFF; margin-bottom: 5px;">Signals Detected:</h4>
             <ul style="background-color: #161B22; padding: 15px 25px; border-radius: 6px; list-style-type: square;">
@@ -382,18 +464,52 @@ with st.spinner(f"Analyzing {ticker}..."):
   else:
     # METRICS BAR
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("PRICE", f"${res['current_price']:.2f}")
+    c1.metric("PRICE", f"\${res['current_price']:.2f}")
     c2.metric("RSI (14)", f"{res['current_rsi']:.1f}")
     c3.metric("DIV YIELD", f"{res['dividend_yield']:.2f}%")
-    c4.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} - ${res['gz_max']:.2f}")
+    c4.metric("GOLDEN ZONE", f"${res['gz_min']:.2f} -${res['gz_max']:.2f}")
     c5.metric("GZ STATUS", "IN ZONE" if res["in_gz"] else "OUTSIDE ZONE")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # GMAIL ALERT TRIGGER
+    bullish_signals = []
+    if res["in_gz"]:
+      bullish_signals.append(
+          f"Price is in Golden Zone (\${res['gz_min']:.2f} -"
+          f" \${res['gz_max']:.2f})"
+      )
+    for div in res["divergences"]:
+      if "Bullish" in div:
+        bullish_signals.append(div)
+    if "GOLDEN CROSS" in res["ema_signal"]:
+      bullish_signals.append("EMA 20 Crossed Above EMA 50 (Golden Cross)")
+    if res["current_rsi"] <= 30:
+      bullish_signals.append(f"RSI Oversold ({res['current_rsi']:.1f})")
+
+    if res["in_gz"] and len(bullish_signals) > 1 and enable_email_alert:
+      if sender_email and app_password and receiver_email:
+        success, msg_text = send_gmail_alert(
+            sender_email,
+            app_password,
+            receiver_email,
+            ticker,
+            res["current_price"],
+            interval,
+            bullish_signals,
+            res["gz_min"],
+            res["gz_max"],
+        )
+        if success:
+          st.success("Gmail Alert Sent! ส่งแจ้งเตือนสำเร็จ")
+        else:
+          st.warning(f"Email Warning: {msg_text}")
+
     # TABS LAYOUT
-    tab1, tab2 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "Technical Analysis & Golden Zone",
         "News Sentiment Analysis",
+        "Auto Market Screener",
     ])
 
     # TAB 1: TECHNICAL ANALYSIS CHART
@@ -504,3 +620,104 @@ with st.spinner(f"Analyzing {ticker}..."):
         )
         st.markdown("<br>", unsafe_allow_html=True)
         st.dataframe(news_df, hide_index=True, use_container_width=True)
+
+    # TAB 3: AUTO MARKET SCREENER (TOP 20 POPULAR STOCKS)
+    with tab3:
+      st.markdown("### Auto Market Golden Zone Screener")
+      st.markdown(
+          "<p style='color: #8B949E;'>สแกนหา Top 20 หุ้นยอดนิยมทั้งไทยและต่างประเทศ"
+          " ที่ราคากำลังหลุดเข้าสู่ Golden Zone (50% - 61.8%) ณ ตอนนี้ทันที</p>",
+          unsafe_allow_html=True,
+      )
+
+      col_s1, col_s2 = st.columns([2, 1])
+      market_choice = col_s1.selectbox(
+          "เลือกกลุ่มหุ้นที่จะสแกน",
+          [
+              "Top 20 Popular Stocks (ไทย & สหรัฐฯ)",
+              "US Tech & Growth Giants (สหรัฐฯ)",
+              "SET50 Big Caps (ไทย)",
+          ],
+      )
+
+      top_20_popular = [
+          "NVDA",
+          "AAPL",
+          "MSFT",
+          "AMZN",
+          "GOOGL",
+          "META",
+          "TSLA",
+          "AMD",
+          "PLTR",
+          "WDC",
+          "MU",
+          "NFLX",
+          "DELTA.BK",
+          "ADVANC.BK",
+          "GULF.BK",
+          "PTT.BK",
+          "BDMS.BK",
+          "KBANK.BK",
+          "CPALL.BK",
+          "AOT.BK",
+      ]
+
+      us_tech_list = [
+          "NVDA",
+          "AAPL",
+          "MSFT",
+          "AMZN",
+          "GOOGL",
+          "META",
+          "TSLA",
+          "AMD",
+          "PLTR",
+          "WDC",
+          "MU",
+          "NFLX",
+          "AVGO",
+          "INTC",
+          "ORCL",
+      ]
+      set50_list = [
+          "DELTA.BK",
+          "ADVANC.BK",
+          "GULF.BK",
+          "PTT.BK",
+          "BDMS.BK",
+          "KBANK.BK",
+          "CPALL.BK",
+          "AOT.BK",
+          "BBL.BK",
+          "SCB.BK",
+          "KTB.BK",
+          "CPN.BK",
+          "PTTEP.BK",
+          "SCC.BK",
+          "TOP.BK",
+      ]
+
+      if market_choice == "Top 20 Popular Stocks (ไทย & สหรัฐฯ)":
+        target_list = top_20_popular
+      elif market_choice == "US Tech & Growth Giants (สหรัฐฯ)":
+        target_list = us_tech_list
+      else:
+        target_list = set50_list
+
+      if col_s2.button("START MARKET SCAN"):
+        with st.spinner("กำลังสแกนหาหุ้นที่เข้า Golden Zone..."):
+          screener_df = scan_golden_zone_stocks(
+              target_list, period=period, interval=interval
+          )
+          if not screener_df.empty:
+            st.success(
+                f"สแกนเสร็จสิ้น! พบหุ้นที่อยู่ใน Golden Zone จำนวน"
+                f" {len(screener_df)} ตัว"
+            )
+            st.dataframe(screener_df, hide_index=True, use_container_width=True)
+          else:
+            st.info(
+                "ขณะนี้ยังไม่มีหุ้นในรายการ Top 20 หลุดเข้ามาใน Golden Zone"
+                " (ราคายังไม่ย่อตัวถึงช่วง 50% - 61.8%)"
+            )
