@@ -170,15 +170,6 @@ def fetch_and_analyze(
     gz_bottom = swing_low + (0.500 * diff)
     gz_top = swing_low + (0.618 * diff)
 
-  # --- คำนวณ DEMAND / SUPPLY ZONE ---
-  # Supply Zone (โซนแรงขายด้านบน): อ้างอิงจาก Swing High
-  supply_top = swing_high
-  supply_bottom = max(df["Open"].iloc[last_h_idx], df["Close"].iloc[last_h_idx])
-
-  # Demand Zone (โซนแรงซื้อด้านล่าง): อ้างอิงจาก Swing Low
-  demand_bottom = swing_low
-  demand_top = min(df["Open"].iloc[last_l_idx], df["Close"].iloc[last_l_idx])
-
   current_price = df["Close"].iloc[-1]
   current_rsi = df["RSI"].iloc[-1]
   in_gz = min(gz_top, gz_bottom) <= current_price <= max(gz_top, gz_bottom)
@@ -205,10 +196,6 @@ def fetch_and_analyze(
       "in_gz": in_gz,
       "gz_min": min(gz_top, gz_bottom),
       "gz_max": max(gz_top, gz_bottom),
-      "supply_top": supply_top,
-      "supply_bottom": supply_bottom,
-      "demand_top": demand_top,
-      "demand_bottom": demand_bottom,
       "ema_signal": ema_signal,
       "divergences": divergence_signals,
       "peaks_high": peaks_high,
@@ -365,13 +352,6 @@ period = st.sidebar.selectbox(
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
-    "<h4 style='color: #8B949E;'>Display Settings</h4>",
-    unsafe_allow_html=True,
-)
-show_demand_supply = st.sidebar.checkbox("Show Demand / Supply Zones", value=True)
-
-st.sidebar.markdown("---")
-st.sidebar.markdown(
     "<h4 style='color: #8B949E;'>Gmail Alert Settings</h4>",
     unsafe_allow_html=True,
 )
@@ -464,7 +444,7 @@ with st.spinner(f"Analyzing {ticker}..."):
           col=1,
       )
 
-      # โซน Golden Zone (แถบสีเขียวเข้ม)
+      # โซน Golden Zone (แถบสีเขียว)
       fig.add_hrect(
           y0=res["gz_min"],
           y1=res["gz_max"],
@@ -476,38 +456,6 @@ with st.spinner(f"Analyzing {ticker}..."):
           row=1,
           col=1,
       )
-
-      # --- วาดกล่อง DEMAND & SUPPLY ZONES ---
-      if show_demand_supply:
-        # Supply Zone (กล่องสีแดงด้านบน)
-        fig.add_hrect(
-            y0=res["supply_bottom"],
-            y1=res["supply_top"],
-            fillcolor="#FF5252",
-            opacity=0.20,
-            line_color="#FF5252",
-            line_width=1,
-            annotation_text="Supply Zone (แรงขาย)",
-            annotation_position="top left",
-            annotation_font_color="#FF5252",
-            row=1,
-            col=1,
-        )
-
-        # Demand Zone (กล่องสีเขียวนีออนด้านล่าง)
-        fig.add_hrect(
-            y0=res["demand_bottom"],
-            y1=res["demand_top"],
-            fillcolor="#00E676",
-            opacity=0.20,
-            line_color="#00E676",
-            line_width=1,
-            annotation_text="Demand Zone (แรงซื้อ)",
-            annotation_position="bottom left",
-            annotation_font_color="#00E676",
-            row=1,
-            col=1,
-        )
 
       # RSI
       fig.add_trace(
