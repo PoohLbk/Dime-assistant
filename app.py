@@ -51,6 +51,13 @@ custom_css = """
     button[data-baseweb="tab"] { color: #8B949E !important; font-weight: 600; }
     button[aria-selected="true"] { color: #00FF00 !important; border-bottom-color: #00FF00 !important; }
     .emerald-accent { color: #00FF00; font-weight: bold; }
+    .trend-card {
+        padding: 12px; border-radius: 8px; font-weight: bold; text-align: center;
+        margin-bottom: 15px; font-size: 1.1rem;
+    }
+    .trend-bullish { background-color: rgba(0, 230, 118, 0.15); border: 1px solid #00E676; color: #00E676; }
+    .trend-bearish { background-color: rgba(255, 82, 82, 0.15); border: 1px solid #FF5252; color: #FF5252; }
+    .trend-sideways { background-color: rgba(255, 215, 0, 0.15); border: 1px solid #FFD700; color: #FFD700; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -93,6 +100,58 @@ def detect_divergence(df, peaks_high, peaks_low):
   return divergence_signals
 
 
+def analyze_trend_state(
+    df, current_price, ema_20, ema_50, peaks_high, peaks_low
+):
+  """ฟังก์ชันวิเคราะห์สภาวะแนวโน้มราคา (Bullish / Bearish / Sideways)"""
+  # 1. ดูโครงสร้างการเรียงตัวของเส้น EMA
+  ema_uptrend = (current_price > ema_20) and (ema_20 > ema_50)
+  ema_downtrend = (current_price < ema_20) and (ema_20 < ema_50)
+
+  # 2. ดูการทำ High / Low ล่าสุด (Structure)
+  if len(peaks_high) >= 2 and len(peaks_low) >= 2:
+    h1, h2 = df["High"].iloc[peaks_high[-2]], df["High"].iloc[peaks_high[-1]]
+    l1, l2 = df["Low"].iloc[peaks_low[-2]], df["Low"].iloc[peaks_low[-1]]
+
+    higher_high = h2 > h1
+    higher_low = l2 > l1
+    lower_high = h2 < h1
+    lower_low = l2 < l1
+
+    if ema_uptrend or (higher_high and higher_low):
+      return (
+          "BULLISH TREND (แนวโน้มขาขึ้น)",
+          "trend-bullish",
+          "🚀 ราคาเคลื่อนที่ทำจุดสูงใหม่ (Higher High) และยืนเหนือเส้น EMA",
+      )
+    elif ema_downtrend or (lower_high and lower_low):
+      return (
+          "BEARISH TREND (แนวโน้มขาลง)",
+          "trend-bearish",
+          "🔻 ราคาเคลื่อนที่ทำจุดต่ำใหม่ (Lower Low) และอยู่ใต้เส้น EMA",
+      )
+
+  # 3. หากกรอบราคากว้างผันผวนสลับไปมา หรือ EMA พันกัน
+  if ema_uptrend:
+    return (
+        "BULLISH TREND (แนวโน้มขาขึ้น)",
+        "trend-bullish",
+        "🚀 ราคายังทรงตัวได้ดีเหนือเส้นค่าเฉลี่ย EMA",
+    )
+  elif ema_downtrend:
+    return (
+        "BEARISH TREND (แนวโน้มขาลง)",
+        "trend-bearish",
+        "🔻 ราคายังคงถูกกดดันใต้เส้นค่าเฉลี่ย EMA",
+    )
+
+  return (
+      "SIDEWAYS / RANGING (กรอบสะสมกำลัง)",
+      "trend-sideways",
+      "↔️ ราคาเคลื่อนที่ออกด้านข้างในกรอบผันผวน ยังไม่มีทิศทางชัดเจน",
+  )
+
+
 @st.cache_data(ttl=60)
 def fetch_and_analyze(
     ticker_symbol: str,
@@ -119,7 +178,7 @@ def fetch_and_analyze(
   if df.empty:
     return None, {}
 
-  # คำนวณ DIVIDEND YIELD แบบ Fallback
+  # คำนวณ DIVIDEND YIELD
   dividend_yield_pct = 0.0
   try:
     info = ticker_obj.info
@@ -170,6 +229,15 @@ def fetch_and_analyze(
     gz_bottom = swing_low + (0.500 * diff)
     gz_top = swing_low + (0.618 * diff)
 
+  # --- คำนวณ DEMAND / SUPPLY ZONES ---
+  supply_top = swing_high
+  supply_bottom = max(
+      df["Open"].iloc[last_h_idx], df["Close"].iloc[last_h_idx]
+  )
+
+  demand_bottom = swing_low
+  demand_top = min(df["Open"].iloc[last_l_idx], df["Close"].iloc[last_l_idx])
+
   current_price = df["Close"].iloc[-1]
   current_rsi = df["RSI"].iloc[-1]
   in_gz = min(gz_top, gz_bottom) <= current_price <= max(gz_top, gz_bottom)
@@ -186,6 +254,11 @@ def fetch_and_analyze(
   else:
     ema_signal = "BEARISH ALIGNMENT (EMA20 < EMA50)"
 
+  # วิเคราะห์สภาวะแนวโน้มราคา (Trend Status)
+  trend_label, trend_css, trend_desc = analyze_trend_state(
+      df, current_price, ema_20_curr, ema_50_curr, peaks_high, peaks_low
+  )
+
   divergence_signals = detect_divergence(df, peaks_high, peaks_low)
 
   analysis_results = {
@@ -196,6 +269,13 @@ def fetch_and_analyze(
       "in_gz": in_gz,
       "gz_min": min(gz_top, gz_bottom),
       "gz_max": max(gz_top, gz_bottom),
+      "supply_top": supply_top,
+      "supply_bottom": supply_bottom,
+      "demand_top": demand_top,
+      "demand_bottom": demand_bottom,
+      "trend_label": trend_label,
+      "trend_css": trend_css,
+      "trend_desc": trend_desc,
       "ema_signal": ema_signal,
       "divergences": divergence_signals,
       "peaks_high": peaks_high,
@@ -287,7 +367,7 @@ def scan_golden_zone_stocks(ticker_list, period="6mo", interval="1d"):
   return pd.DataFrame(results)
 
 
-# --- 4. GMAIL ALERT & REAL-TIME NEWS SCRAPER (SORTED NEWEST FIRST) ---
+# --- 4. GMAIL ALERT & REAL-TIME NEWS SCRAPER ---
 
 
 def send_gmail_alert(
@@ -405,7 +485,6 @@ def scrape_news_vader(ticker_symbol: str):
 
       if parsed_news:
         df_news = pd.DataFrame(parsed_news)
-        # เรียงลำดับข่าวตามวันที่จากล่าสุดลงไปหาเก่าสุด
         df_news = df_news.sort_values(by="dt", ascending=False).drop(
             columns=["dt"]
         )
@@ -437,6 +516,15 @@ else:
 
 period = st.sidebar.selectbox(
     "LOOKBACK PERIOD", period_options, index=default_p
+)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    "<h4 style='color: #8B949E;'>Display Settings</h4>",
+    unsafe_allow_html=True,
+)
+show_demand_supply = st.sidebar.checkbox(
+    "Show Demand / Supply Zones", value=True
 )
 
 st.sidebar.markdown("---")
@@ -478,6 +566,14 @@ with st.spinner(f"Analyzing {ticker}..."):
     c5.metric("GZ STATUS", "IN ZONE" if res["in_gz"] else "OUTSIDE ZONE")
 
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # TREND STATUS BANNER
+    st.markdown(
+        f"<div class='trend-card {res['trend_css']}'>"
+        f"{res['trend_label']}<br><span style='font-size: 0.9rem; font-weight:"
+        f" normal;'>{res['trend_desc']}</span></div>",
+        unsafe_allow_html=True,
+    )
 
     # GMAIL ALERT TRIGGER
     bullish_signals = []
@@ -580,6 +676,38 @@ with st.spinner(f"Analyzing {ticker}..."):
           col=1,
       )
 
+      # --- วาด DEMAND & SUPPLY ZONES ---
+      if show_demand_supply:
+        # Supply Zone (กล่องสีแดงด้านบน)
+        fig.add_hrect(
+            y0=res["supply_bottom"],
+            y1=res["supply_top"],
+            fillcolor="#FF5252",
+            opacity=0.20,
+            line_color="#FF5252",
+            line_width=1,
+            annotation_text="Supply Zone (แรงขาย)",
+            annotation_position="top left",
+            annotation_font_color="#FF5252",
+            row=1,
+            col=1,
+        )
+
+        # Demand Zone (กล่องสีเขียวนีออนด้านล่าง)
+        fig.add_hrect(
+            y0=res["demand_bottom"],
+            y1=res["demand_top"],
+            fillcolor="#00E676",
+            opacity=0.20,
+            line_color="#00E676",
+            line_width=1,
+            annotation_text="Demand Zone (แรงซื้อ)",
+            annotation_position="bottom left",
+            annotation_font_color="#00E676",
+            row=1,
+            col=1,
+        )
+
       # RSI
       fig.add_trace(
           go.Scatter(
@@ -604,7 +732,7 @@ with st.spinner(f"Analyzing {ticker}..."):
       )
       st.plotly_chart(fig, use_container_width=True)
 
-    # TAB 2: REAL-TIME MONTHLY NEWS SENTIMENT (SORTED NEWEST FIRST)
+    # TAB 2: REAL-TIME MONTHLY NEWS SENTIMENT
     with tab2:
       st.markdown("### Real-Time Market News Sentiment (Past 30 Days)")
       news_df = scrape_news_vader(ticker)
