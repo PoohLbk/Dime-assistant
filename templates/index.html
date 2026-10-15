@@ -24,10 +24,9 @@
             height: auto;
             z-index: -2;
             object-fit: cover;
-            filter: brightness(0.35) contrast(1.1); /* ปรับความสว่างให้พอดีไม่แย่งซีนข้อมูล */
+            filter: brightness(0.35) contrast(1.1);
         }
         
-        /* Dark Gradient Overlay ซ้อนทับวิดีโออีกชั้น */
         .video-overlay {
             position: fixed;
             inset: 0;
@@ -39,48 +38,64 @@
 </head>
 <body class="min-h-screen flex flex-col md:flex-row antialiased relative">
 
-<!-- BACKGROUND VIDEO LAYER -->
-<video autoplay loop muted playsinline id="bgVideo">
-    <source src="{{ url_for('static', filename='coverr-financial-analysis-of-cryptocurrency-649-1080p.mp4') }}" type="video/mp4">
-    <!-- Fallback path -->
-    <source src="/static/coverr-financial-analysis-of-cryptocurrency-649-1080p.mp4" type="video/mp4">
-</video>
-<div class="video-overlay"></div>
+    <!-- BACKGROUND VIDEO LAYER -->
+    <video autoplay loop muted playsinline id="bgVideo">
+        <source src="{{ url_for('static', filename='coverr-financial-analysis-of-cryptocurrency-649-1080p.mp4') }}" type="video/mp4">
+        <source src="/static/coverr-financial-analysis-of-cryptocurrency-649-1080p.mp4" type="video/mp4">
+    </video>
+    <div class="video-overlay"></div>
 
-    <!-- LEFT SIDEBAR: CONTROL PANEL -->
-    <aside class="w-full md:w-80 bg-[#07080A]/90 emerald-border p-5 space-y-6 shrink-0 backdrop-blur-md">
-        <h2 class="text-xs font-black uppercase tracking-widest text-[#2ED88A]">Control Panel</h2>
+    <!-- LEFT SIDEBAR: CONTROL PANEL & WATCHLIST -->
+    <aside class="w-full md:w-80 bg-[#07080A]/90 emerald-border p-5 space-y-5 shrink-0 backdrop-blur-md">
+        <div class="flex justify-between items-center">
+            <h2 class="text-xs font-black uppercase tracking-widest text-[#2ED88A]">Control Panel</h2>
+            <button onclick="toggleFavorite()" id="starBtn" class="text-lg text-[#7A838D] hover:text-[#FFEA00] transition-colors" title="Add to Watchlist">
+                ⭐
+            </button>
+        </div>
         
         <div class="space-y-4 text-xs">
             <div>
-                <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Symbol</label>
-                <input type="text" id="tickerInput" value="PLTR" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+                <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-1.5">Symbol</label>
+                <input type="text" id="tickerInput" value="PLTR" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-3 py-2 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
             </div>
 
-            <div>
-                <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Timeframe</label>
-                <select id="timeframeInput" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
-                    <option value="1d">1d</option>
-                    <option value="1h">1h</option>
-                    <option value="1wk">1wk</option>
-                </select>
-            </div>
-
-            <div>
-                <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Lookback Period</label>
-                <select id="periodInput" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
-                    <option value="6mo">6mo</option>
-                    <option value="1y">1y</option>
-                    <option value="1mo">1mo</option>
-                </select>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-1">Timeframe</label>
+                    <select id="timeframeInput" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-2 py-2 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+                        <option value="1d">1d</option>
+                        <option value="1h">1h</option>
+                        <option value="1wk">1wk</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-1">Lookback</label>
+                    <select id="periodInput" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-2 py-2 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+                        <option value="6mo">6mo</option>
+                        <option value="1y">1y</option>
+                        <option value="1mo">1mo</option>
+                    </select>
+                </div>
             </div>
 
             <button onclick="fetchStockData()" class="w-full bg-[#008000] hover:bg-[#00B300] text-white font-bold py-2.5 rounded text-xs uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(0,255,0,0.2)]">
                 UPDATE ANALYSIS
             </button>
 
+            <!-- FEATURE 4: WATCHLIST & PORTFOLIO TRACKER -->
             <hr class="border-[#1E232A]">
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <p class="font-bold text-[#7A838D] uppercase tracking-wider">⭐ My Watchlist</p>
+                    <span id="favCount" class="text-[10px] text-[#2ED88A] font-bold">0 Saved</span>
+                </div>
+                <div id="watchlistContainer" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                    <p class="text-[10px] text-[#7A838D]">ยังไม่มีรายการโปรด กด ⭐ เพื่อบันทึก</p>
+                </div>
+            </div>
 
+            <hr class="border-[#1E232A]">
             <div>
                 <p class="font-bold text-[#7A838D] uppercase tracking-wider mb-2">Display Settings</p>
                 <label class="flex items-center gap-2 cursor-pointer text-[#D9DEE3]">
@@ -89,20 +104,7 @@
                 </label>
             </div>
 
-            <hr class="border-[#1E232A]">
-
-            <div class="space-y-2">
-                <p class="font-bold text-[#7A838D] uppercase tracking-wider">Gmail Alert Settings</p>
-                <input type="text" placeholder="Sender Gmail" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white p-2 rounded text-[11px]">
-                <input type="password" placeholder="App Password (16-digits)" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white p-2 rounded text-[11px]">
-                <input type="text" placeholder="Receiver Email" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white p-2 rounded text-[11px]">
-                <label class="flex items-center gap-2 cursor-pointer text-[#D9DEE3] mt-2">
-                    <input type="checkbox" checked class="accent-[#2ED88A]">
-                    Enable Gmail Alert
-                </label>
-            </div>
-
-            <div class="pt-4 text-[10px] text-[#7A838D]">
+            <div class="pt-2 text-[10px] text-[#7A838D]">
                 <p class="text-[#2ED88A] font-bold">⚠ Disclaimer</p>
                 <p>ข้อมูลสำหรับการวิเคราะห์ทางเทคนิคเท่านั้น ไม่ใช่คำแนะนำการลงทุน</p>
             </div>
@@ -110,10 +112,10 @@
     </aside>
 
     <!-- MAIN DASHBOARD CONTENT -->
-    <main class="flex-1 p-6 space-y-5 min-w-0 z-10">
+    <main class="flex-1 p-6 space-y-4 min-w-0 z-10">
         
         <!-- HEADER -->
-        <header class="flex items-center gap-3.5 pb-2">
+        <header class="flex items-center gap-3.5 pb-1">
             <div class="w-10 h-10 rounded border border-[#2ED88A] bg-[#2ED88A]/[0.08] shadow-[0_0_24px_rgba(46,216,138,0.22)] flex items-center justify-center text-[#2ED88A]">
                 📈
             </div>
@@ -151,19 +153,33 @@
             </div>
         </div>
 
-        <!-- TREND STATUS CARD -->
-        <div id="trendCard" class="p-3.5 rounded text-center font-bold text-sm bg-[#00E676]/10 border border-[#00E676] text-[#00E676] backdrop-blur-md">
-            BULLISH TREND (แนวโน้มขาขึ้น)<br>
-            <span class="text-xs font-normal">🚀 ราคาเคลื่อนที่ทำจุดสูงใหม่ (Higher High) และยืนเหนือเส้น EMA</span>
+        <!-- FEATURE 5: AI MARKET ASSISTANT SUMMARY BOX -->
+        <div class="emerald-card p-3.5 rounded border-l-4 border-l-[#2ED88A] bg-[#2ED88A]/[0.03]">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs">🤖</span>
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-[#2ED88A]">AI Market Assistant Summary</span>
+            </div>
+            <p id="aiSummaryText" class="text-xs text-[#D9DEE3] leading-relaxed">
+                กำลังวิเคราะห์และประมวลผลข้อมูลภาพรวม...
+            </p>
         </div>
 
-        <!-- SIGNAL DETECTION -->
-        <div class="emerald-card p-3.5 rounded text-xs">
-            <div class="flex items-center justify-between text-[#7A838D] font-bold mb-1">
-                <span>🔔 BUY SIGNAL DETECTION</span>
-                <span id="sigTicker" class="font-mono">PLTR · 1d</span>
+        <!-- SIGNAL & RISK MANAGEMENT CARD -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div id="signalBox" class="emerald-card p-3.5 rounded md:col-span-2 flex items-center">
+                <div>
+                    <span class="text-[10px] font-bold text-[#7A838D] uppercase tracking-wider">Trading Signal Engine</span>
+                    <p id="signalText" class="font-bold text-white mt-1">กำลังคำนวณสัญญาณ...</p>
+                </div>
             </div>
-            <p id="sigText" class="text-[#7A838D]">ยังไม่พบสัญญาณเข้าซื้อ ณ ตอนนี้</p>
+            <div class="emerald-card p-3.5 rounded space-y-1">
+                <span class="text-[10px] font-bold text-[#7A838D] uppercase tracking-wider">Risk Management (SL / TP)</span>
+                <div class="flex justify-between font-mono mt-1">
+                    <span class="text-[#FF5252]">SL: <b id="slVal">\$0.00</b></span>
+                    <span class="text-[#00E676]">TP: <b id="tpVal">\$0.00</b></span>
+                </div>
+                <p class="text-[10px] text-[#7A838D]">Risk-to-Reward Ratio: <span id="rrVal" class="text-white font-bold">1:0</span></p>
+            </div>
         </div>
 
         <!-- TAB NAVIGATION -->
@@ -175,7 +191,7 @@
 
         <!-- TAB CONTENT 1: TECHNICAL CHART -->
         <div id="tabTech" class="emerald-card p-4 rounded">
-            <div id="chartPlot" class="w-full h-[550px]"></div>
+            <div id="chartPlot" class="w-full h-[520px]"></div>
         </div>
 
         <!-- TAB CONTENT 2: NEWS SENTIMENT -->
@@ -222,6 +238,67 @@
 
     <script>
         let currentData = null;
+        let watchlist = JSON.parse(localStorage.getItem('emerald_watchlist')) || ['PLTR', 'NVDA', 'GC=F', 'DELTA.BK'];
+
+        function initWatchlist() {
+            const container = document.getElementById('watchlistContainer');
+            document.getElementById('favCount').innerText = `${watchlist.length} Saved`;
+            container.innerHTML = '';
+
+            if (watchlist.length === 0) {
+                container.innerHTML = '<p class="text-[10px] text-[#7A838D]">ยังไม่มีรายการโปรด กด ⭐ เพื่อบันทึก</p>';
+                return;
+            }
+
+            watchlist.forEach(symbol => {
+                container.innerHTML += `
+                    <div class="flex items-center gap-1 bg-[#0F1216] border border-[#1E232A] hover:border-[#2ED88A] px-2 py-1 rounded text-[11px] font-bold">
+                        <span onclick="selectWatchlist('${symbol}')" class="cursor-pointer text-white hover:text-[#2ED88A]">${symbol}</span>
+                        <span onclick="removeFavorite('${symbol}')" class="cursor-pointer text-[#7A838D] hover:text-[#FF5252] ml-1">×</span>
+                    </div>
+                `;
+            });
+
+            updateStarState();
+        }
+
+        function updateStarState() {
+            const currentSymbol = document.getElementById('tickerInput').value.toUpperCase().strip();
+            const starBtn = document.getElementById('starBtn');
+            if (watchlist.includes(currentSymbol)) {
+                starBtn.classList.add('text-[#FFEA00]');
+                starBtn.classList.remove('text-[#7A838D]');
+            } else {
+                starBtn.classList.remove('text-[#FFEA00]');
+                starBtn.classList.add('text-[#7A838D]');
+            }
+        }
+
+        function toggleFavorite() {
+            const currentSymbol = document.getElementById('tickerInput').value.upperCase().strip();
+            if (!currentSymbol) return;
+
+            const index = watchlist.indexOf(currentSymbol);
+            if (index > -1) {
+                watchlist.splice(index, 1);
+            } else {
+                watchlist.push(currentSymbol);
+            }
+
+            localStorage.setItem('emerald_watchlist', JSON.stringify(watchlist));
+            initWatchlist();
+        }
+
+        function removeFavorite(symbol) {
+            watchlist = watchlist.filter(s => s !== symbol);
+            localStorage.setItem('emerald_watchlist', JSON.stringify(watchlist));
+            initWatchlist();
+        }
+
+        function selectWatchlist(symbol) {
+            document.getElementById('tickerInput').value = symbol;
+            fetchStockData();
+        }
 
         function switchTab(tab) {
             ['tabTech', 'tabNews', 'tabScreen'].forEach(id => document.getElementById(id).classList.add('hidden'));
@@ -246,7 +323,7 @@
             const period = document.getElementById('periodInput').value || '6mo';
             const interval = document.getElementById('timeframeInput').value || '1d';
 
-            document.getElementById('sigTicker').innerText = `${ticker} · ${interval}`;
+            updateStarState();
 
             try {
                 const res = await fetch(`/api/analyze?ticker=${ticker}&period=${period}&interval=${interval}`);
@@ -270,15 +347,15 @@
                     mStatus.className = 'text-base font-bold text-[#7A838D]';
                 }
 
-                // Trend Banner
-                const trendCard = document.getElementById('trendCard');
-                if (data.is_uptrend) {
-                    trendCard.className = 'p-3.5 rounded text-center font-bold text-sm bg-[#00E676]/10 border border-[#00E676] text-[#00E676] backdrop-blur-md';
-                    trendCard.innerHTML = `BULLISH TREND (แนวโน้มขาขึ้น)<br><span class="text-xs font-normal">🚀 ราคาเคลื่อนที่ทำจุดสูงใหม่ (Higher High) และยืนเหนือเส้น EMA</span>`;
-                } else {
-                    trendCard.className = 'p-3.5 rounded text-center font-bold text-sm bg-[#FF5252]/10 border border-[#FF5252] text-[#FF5252] backdrop-blur-md';
-                    trendCard.innerHTML = `BEARISH TREND (แนวโน้มขาลง)<br><span class="text-xs font-normal">🔻 ราคาเคลื่อนที่ทำจุดต่ำใหม่ (Lower Low) และอยู่ใต้เส้น EMA</span>`;
-                }
+                // AI Summary Text
+                document.getElementById('aiSummaryText').innerText = data.ai_summary || 'ไม่มีข้อมูลสรุป';
+
+                // Signal & Risk Management
+                document.getElementById('signalText').innerText = data.signal_text;
+                document.getElementById('signalText').style.color = data.signal_color;
+                document.getElementById('slVal').innerText = `$${data.stop_loss.toFixed(2)}`;
+                document.getElementById('tpVal').innerText = `$${data.take_profit.toFixed(2)}`;
+                document.getElementById('rrVal').innerText = `1:${data.rr_ratio}`;
 
                 drawChart();
                 renderNews(data);
@@ -388,6 +465,8 @@
             }
         }
 
+        // Init Watchlist & Load First Stock
+        initWatchlist();
         fetchStockData();
     </script>
 </body>
