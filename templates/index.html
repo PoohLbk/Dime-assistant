@@ -10,26 +10,56 @@
     <style>
         body { font-family: 'JetBrains Mono', monospace; background-color: #07080A; color: #D9DEE3; }
         .emerald-border { border: 1px solid #1B1F24; }
-        .emerald-card { background: #090B0D; border: 1px solid #1B1F24; }
+        .emerald-card { background: rgba(9, 11, 13, 0.85); border: 1px solid #1B1F24; backdrop-filter: blur(8px); }
         .emerald-accent { color: #2ED88A; }
-        .bg-emerald-accent { background-color: #2ED88A; }
+        
+        /* Video Background Styling */
+        #bgVideo {
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: -2;
+            object-fit: cover;
+            filter: brightness(0.35) contrast(1.1); /* ปรับความสว่างให้พอดีไม่แย่งซีนข้อมูล */
+        }
+        
+        /* Dark Gradient Overlay ซ้อนทับวิดีโออีกชั้น */
+        .video-overlay {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle, rgba(7,8,10,0.6) 0%, rgba(7,8,10,0.92) 100%);
+            z-index: -1;
+            pointer-events: none;
+        }
     </style>
 </head>
-<body class="min-h-screen flex flex-col md:flex-row antialiased">
+<body class="min-h-screen flex flex-col md:flex-row antialiased relative">
+
+<!-- BACKGROUND VIDEO LAYER -->
+<video autoplay loop muted playsinline id="bgVideo">
+    <source src="{{ url_for('static', filename='coverr-financial-analysis-of-cryptocurrency-649-1080p.mp4') }}" type="video/mp4">
+    <!-- Fallback path -->
+    <source src="/static/coverr-financial-analysis-of-cryptocurrency-649-1080p.mp4" type="video/mp4">
+</video>
+<div class="video-overlay"></div>
 
     <!-- LEFT SIDEBAR: CONTROL PANEL -->
-    <aside class="w-full md:w-80 bg-[#07080A] emerald-border p-5 space-y-6 shrink-0">
+    <aside class="w-full md:w-80 bg-[#07080A]/90 emerald-border p-5 space-y-6 shrink-0 backdrop-blur-md">
         <h2 class="text-xs font-black uppercase tracking-widest text-[#2ED88A]">Control Panel</h2>
         
         <div class="space-y-4 text-xs">
             <div>
                 <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Symbol</label>
-                <input type="text" id="tickerInput" value="PLTR" class="w-full bg-[#0F1216] border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+                <input type="text" id="tickerInput" value="PLTR" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
             </div>
 
             <div>
                 <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Timeframe</label>
-                <select id="timeframeInput" class="w-full bg-[#0F1216] border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+                <select id="timeframeInput" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
                     <option value="1d">1d</option>
                     <option value="1h">1h</option>
                     <option value="1wk">1wk</option>
@@ -38,7 +68,7 @@
 
             <div>
                 <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Lookback Period</label>
-                <select id="periodInput" class="w-full bg-[#0F1216] border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+                <select id="periodInput" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
                     <option value="6mo">6mo</option>
                     <option value="1y">1y</option>
                     <option value="1mo">1mo</option>
@@ -63,9 +93,9 @@
 
             <div class="space-y-2">
                 <p class="font-bold text-[#7A838D] uppercase tracking-wider">Gmail Alert Settings</p>
-                <input type="text" placeholder="Sender Gmail" class="w-full bg-[#0F1216] border border-[#1E232A] text-white p-2 rounded text-[11px]">
-                <input type="password" placeholder="App Password (16-digits)" class="w-full bg-[#0F1216] border border-[#1E232A] text-white p-2 rounded text-[11px]">
-                <input type="text" placeholder="Receiver Email" class="w-full bg-[#0F1216] border border-[#1E232A] text-white p-2 rounded text-[11px]">
+                <input type="text" placeholder="Sender Gmail" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white p-2 rounded text-[11px]">
+                <input type="password" placeholder="App Password (16-digits)" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white p-2 rounded text-[11px]">
+                <input type="text" placeholder="Receiver Email" class="w-full bg-[#0F1216]/90 border border-[#1E232A] text-white p-2 rounded text-[11px]">
                 <label class="flex items-center gap-2 cursor-pointer text-[#D9DEE3] mt-2">
                     <input type="checkbox" checked class="accent-[#2ED88A]">
                     Enable Gmail Alert
@@ -80,7 +110,7 @@
     </aside>
 
     <!-- MAIN DASHBOARD CONTENT -->
-    <main class="flex-1 p-6 space-y-5 min-w-0">
+    <main class="flex-1 p-6 space-y-5 min-w-0 z-10">
         
         <!-- HEADER -->
         <header class="flex items-center gap-3.5 pb-2">
@@ -122,7 +152,7 @@
         </div>
 
         <!-- TREND STATUS CARD -->
-        <div id="trendCard" class="p-3.5 rounded text-center font-bold text-sm bg-[#00E676]/10 border border-[#00E676] text-[#00E676]">
+        <div id="trendCard" class="p-3.5 rounded text-center font-bold text-sm bg-[#00E676]/10 border border-[#00E676] text-[#00E676] backdrop-blur-md">
             BULLISH TREND (แนวโน้มขาขึ้น)<br>
             <span class="text-xs font-normal">🚀 ราคาเคลื่อนที่ทำจุดสูงใหม่ (Higher High) และยืนเหนือเส้น EMA</span>
         </div>
@@ -137,7 +167,7 @@
         </div>
 
         <!-- TAB NAVIGATION -->
-        <div class="flex border-b border-[#1B1F24] text-xs font-black uppercase tracking-wider">
+        <div class="flex border-b border-[#1B1F24] text-xs font-black uppercase tracking-wider backdrop-blur-md">
             <button onclick="switchTab('tech')" id="tabBtnTech" class="px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]">TECHNICAL ANALYSIS & GOLDEN ZONE</button>
             <button onclick="switchTab('news')" id="tabBtnNews" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white">NEWS SENTIMENT ANALYSIS</button>
             <button onclick="switchTab('screen')" id="tabBtnScreen" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white">AUTO MARKET SCREENER</button>
@@ -243,10 +273,10 @@
                 // Trend Banner
                 const trendCard = document.getElementById('trendCard');
                 if (data.is_uptrend) {
-                    trendCard.className = 'p-3.5 rounded text-center font-bold text-sm bg-[#00E676]/10 border border-[#00E676] text-[#00E676]';
+                    trendCard.className = 'p-3.5 rounded text-center font-bold text-sm bg-[#00E676]/10 border border-[#00E676] text-[#00E676] backdrop-blur-md';
                     trendCard.innerHTML = `BULLISH TREND (แนวโน้มขาขึ้น)<br><span class="text-xs font-normal">🚀 ราคาเคลื่อนที่ทำจุดสูงใหม่ (Higher High) และยืนเหนือเส้น EMA</span>`;
                 } else {
-                    trendCard.className = 'p-3.5 rounded text-center font-bold text-sm bg-[#FF5252]/10 border border-[#FF5252] text-[#FF5252]';
+                    trendCard.className = 'p-3.5 rounded text-center font-bold text-sm bg-[#FF5252]/10 border border-[#FF5252] text-[#FF5252] backdrop-blur-md';
                     trendCard.innerHTML = `BEARISH TREND (แนวโน้มขาลง)<br><span class="text-xs font-normal">🔻 ราคาเคลื่อนที่ทำจุดต่ำใหม่ (Lower Low) และอยู่ใต้เส้น EMA</span>`;
                 }
 
@@ -293,7 +323,7 @@
 
             const layout = {
                 grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-                paper_bgcolor: '#090B0D', plot_bgcolor: '#12161C',
+                paper_bgcolor: 'rgba(9, 11, 13, 0.7)', plot_bgcolor: 'rgba(18, 22, 28, 0.7)',
                 font: { color: '#7A838D' },
                 xaxis: { gridcolor: '#1B1F24', rangeslider: { visible: false } },
                 yaxis: { gridcolor: '#1B1F24', domain: [0.3, 1] },
@@ -339,7 +369,7 @@
                 let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">';
                 data.matched.forEach(item => {
                     html += `
-                        <div class="p-3 bg-[#0F1216] border border-[#2ED88A]/40 rounded flex justify-between items-center">
+                        <div class="p-3 bg-[#0F1216]/90 border border-[#2ED88A]/40 rounded flex justify-between items-center backdrop-blur-md">
                             <div>
                                 <p class="font-bold text-white text-sm">${item.symbol}</p>
                                 <p class="text-[10px] text-[#7A838D]">GZ: $${item.gz_min.toFixed(2)} - $${item.gz_max.toFixed(2)}</p>
