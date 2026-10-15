@@ -11,7 +11,7 @@ from scipy.signal import find_peaks
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# โหลด NLTK Lexicon
+# โหลด NLTK Lexicon สำหรับวิเคราะห์ Sentiment
 nltk.download("vader_lexicon", quiet=True)
 
 app = Flask(__name__)
@@ -26,7 +26,7 @@ def calculate_rsi(series, period=14):
     return 100 - (100 / (1 + rs))
 
 
-# --- SCRAPE NEWS & SORT BY DATE (DESCENDING) ---
+# --- SCRAPE NEWS & SORT BY DATE (MOST RECENT FIRST) ---
 def scrape_news_vader(ticker_symbol):
     ticker_map = {
         "GC=F": "Gold market",
@@ -51,7 +51,7 @@ def scrape_news_vader(ticker_symbol):
                 )
                 raw_date = item.find("pubDate").text
 
-                # แปลงวันที่สำหรับใช้ Sort และแสดงผล
+                # แปลงข้อความวันที่เป็น Object Datetime สำหรับการจัดเรียง
                 dt_obj = datetime.min
                 try:
                     dt_obj = datetime.strptime(raw_date[5:25], "%d %b %Y %H:%M:%S")
@@ -67,17 +67,17 @@ def scrape_news_vader(ticker_symbol):
                 )
 
                 parsed_news.append({
-                    "dt_obj": dt_obj,  # เก็บไว้ใช้เรียงลำดับวันที่
+                    "dt_obj": dt_obj,  # ใช้สำหรับ Sort ข่าว
                     "time": formatted_time,
                     "headline": clean_title,
                     "sentiment": sentiment,
                     "score": round(score, 2),
                 })
 
-            # 📌 จัดเรียงข่าวจากวันที่ล่าสุดลงไป (Most Recent First)
+            # 📌 จัดเรียงจากข่าวล่าสุดลงไปหาข่าวเก่าสุด (Most Recent First)
             parsed_news = sorted(parsed_news, key=lambda x: x["dt_obj"], reverse=True)[:15]
 
-            # ลบ dt_obj ออกก่อนส่ง JSON
+            # ลบ Key dt_obj ออกก่อนส่งผลลัพธ์เป็น JSON
             for n in parsed_news:
                 del n["dt_obj"]
 
@@ -149,7 +149,7 @@ def analyze():
         gz_max = float(max(gz_top, gz_bottom))
         in_gz = bool(gz_min <= current_price <= gz_max)
 
-        # Demand & Supply Zones
+        # Supply / Demand Zones
         supply_top = float(swing_high)
         supply_bottom = float(max(df["Open"].iloc[last_h_idx], df["Close"].iloc[last_h_idx]))
         demand_bottom = float(swing_low)
