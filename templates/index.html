@@ -3,193 +3,358 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMERALD | Ultimate Stock & News Analytics</title>
+    <title>Emerald Stock & Commodity Analytics</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #07080A; color: #D9DEE3; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .emerald-glow { box-shadow: 0 0 25px rgba(46, 216, 138, 0.15); }
-        .emerald-card { background: rgba(12, 15, 18, 0.85); border: 1px solid #1E232A; backdrop-filter: blur(12px); }
+        body { font-family: 'JetBrains Mono', monospace; background-color: #07080A; color: #D9DEE3; }
+        .emerald-border { border: 1px solid #1B1F24; }
+        .emerald-card { background: #090B0D; border: 1px solid #1B1F24; }
+        .emerald-accent { color: #2ED88A; }
+        .bg-emerald-accent { background-color: #2ED88A; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased">
+<body class="min-h-screen flex flex-col md:flex-row antialiased">
 
-    <!-- Top Header -->
-    <header class="border-b border-[#1E232A] bg-[#0A0D10]/90 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-[#2ED88A]/10 border border-[#2ED88A]/40 flex items-center justify-center text-[#2ED88A] emerald-glow">⚡</div>
+    <!-- LEFT SIDEBAR: CONTROL PANEL -->
+    <aside class="w-full md:w-80 bg-[#07080A] emerald-border p-5 space-y-6 shrink-0">
+        <h2 class="text-xs font-black uppercase tracking-widest text-[#2ED88A]">Control Panel</h2>
+        
+        <div class="space-y-4 text-xs">
             <div>
-                <h1 class="text-lg font-extrabold text-white tracking-wider">EMERALD <span class="text-[#2ED88A]">ANALYTICS</span></h1>
-                <p class="text-[10px] uppercase tracking-widest text-[#7A838D] font-bold">Golden Zone • RSI • 15-Day News Sentiment</p>
+                <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Symbol</label>
+                <input type="text" id="tickerInput" value="PLTR" class="w-full bg-[#0F1216] border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+            </div>
+
+            <div>
+                <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Timeframe</label>
+                <select id="timeframeInput" class="w-full bg-[#0F1216] border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+                    <option value="1d">1d</option>
+                    <option value="1h">1h</option>
+                    <option value="1wk">1wk</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block font-bold text-[#7A838D] uppercase tracking-wider mb-2">Lookback Period</label>
+                <select id="periodInput" class="w-full bg-[#0F1216] border border-[#1E232A] text-white px-3 py-2.5 rounded text-xs font-bold uppercase focus:outline-none focus:border-[#2ED88A]">
+                    <option value="6mo">6mo</option>
+                    <option value="1y">1y</option>
+                    <option value="1mo">1mo</option>
+                </select>
+            </div>
+
+            <button onclick="fetchStockData()" class="w-full bg-[#008000] hover:bg-[#00B300] text-white font-bold py-2.5 rounded text-xs uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(0,255,0,0.2)]">
+                UPDATE ANALYSIS
+            </button>
+
+            <hr class="border-[#1E232A]">
+
+            <div>
+                <p class="font-bold text-[#7A838D] uppercase tracking-wider mb-2">Display Settings</p>
+                <label class="flex items-center gap-2 cursor-pointer text-[#D9DEE3]">
+                    <input type="checkbox" id="showZones" checked onchange="drawChart()" class="accent-[#2ED88A]">
+                    Show Demand / Supply Zones
+                </label>
+            </div>
+
+            <hr class="border-[#1E232A]">
+
+            <div class="space-y-2">
+                <p class="font-bold text-[#7A838D] uppercase tracking-wider">Gmail Alert Settings</p>
+                <input type="text" placeholder="Sender Gmail" class="w-full bg-[#0F1216] border border-[#1E232A] text-white p-2 rounded text-[11px]">
+                <input type="password" placeholder="App Password (16-digits)" class="w-full bg-[#0F1216] border border-[#1E232A] text-white p-2 rounded text-[11px]">
+                <input type="text" placeholder="Receiver Email" class="w-full bg-[#0F1216] border border-[#1E232A] text-white p-2 rounded text-[11px]">
+                <label class="flex items-center gap-2 cursor-pointer text-[#D9DEE3] mt-2">
+                    <input type="checkbox" checked class="accent-[#2ED88A]">
+                    Enable Gmail Alert
+                </label>
+            </div>
+
+            <div class="pt-4 text-[10px] text-[#7A838D]">
+                <p class="text-[#2ED88A] font-bold">⚠ Disclaimer</p>
+                <p>ข้อมูลสำหรับการวิเคราะห์ทางเทคนิคเท่านั้น ไม่ใช่คำแนะนำการลงทุน</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN DASHBOARD CONTENT -->
+    <main class="flex-1 p-6 space-y-5 min-w-0">
+        
+        <!-- HEADER -->
+        <header class="flex items-center gap-3.5 pb-2">
+            <div class="w-10 h-10 rounded border border-[#2ED88A] bg-[#2ED88A]/[0.08] shadow-[0_0_24px_rgba(46,216,138,0.22)] flex items-center justify-center text-[#2ED88A]">
+                📈
+            </div>
+            <div>
+                <h1 class="m-0 text-xl font-black tracking-wider text-[#F2F5F7]">
+                    EMERALD <span class="text-[#2ED88A]">STOCK & COMMODITY ANALYTICS</span>
+                </h1>
+                <p class="m-0 text-[10.5px] font-bold uppercase tracking-widest text-[#7A838D]">
+                    Technical Analysis · Golden Zone · News Sentiment · Market Screener
+                </p>
+            </div>
+        </header>
+
+        <!-- TOP METRICS STRIP -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div class="emerald-card p-3 rounded text-center">
+                <p class="text-[10px] font-bold text-[#7A838D] uppercase">PRICE</p>
+                <p id="mPrice" class="text-base font-bold text-white mt-1">\$0.00</p>
+            </div>
+            <div class="emerald-card p-3 rounded text-center">
+                <p class="text-[10px] font-bold text-[#7A838D] uppercase">RSI (14)</p>
+                <p id="mRsi" class="text-base font-bold text-white mt-1">0.0</p>
+            </div>
+            <div class="emerald-card p-3 rounded text-center">
+                <p class="text-[10px] font-bold text-[#7A838D] uppercase">DIV YIELD</p>
+                <p id="mDiv" class="text-base font-bold text-white mt-1">0.00%</p>
+            </div>
+            <div class="emerald-card p-3 rounded text-center">
+                <p class="text-[10px] font-bold text-[#7A838D] uppercase">GOLDEN ZONE</p>
+                <p id="mGz" class="text-base font-bold text-white mt-1">\$0.00 - \$0.00</p>
+            </div>
+            <div class="emerald-card p-3 rounded text-center">
+                <p class="text-[10px] font-bold text-[#7A838D] uppercase">GZ STATUS</p>
+                <p id="mStatus" class="text-base font-bold text-[#7A838D] mt-1">OUTSIDE</p>
             </div>
         </div>
 
-        <div class="flex items-center gap-2">
-            <input type="text" id="tickerInput" value="PLTR" class="bg-[#0F1216] border border-[#1E232A] text-white px-4 py-2 rounded-xl text-sm font-mono uppercase focus:outline-none focus:border-[#2ED88A] w-36" placeholder="SYMBOL...">
-            <button onclick="fetchStockData()" class="bg-[#2ED88A] hover:bg-[#38ef9b] text-[#07080A] font-bold text-xs uppercase px-5 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(46,216,138,0.25)] active:scale-95">Analyze</button>
-        </div>
-    </header>
-
-    <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
-
-        <!-- Top Metrics Cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="emerald-card p-4 rounded-2xl">
-                <p class="text-[10px] font-bold uppercase text-[#7A838D]">Last Price</p>
-                <p id="priceMetric" class="text-2xl font-black text-white font-mono mt-1">\$0.00</p>
-            </div>
-            <div class="emerald-card p-4 rounded-2xl">
-                <p class="text-[10px] font-bold uppercase text-[#7A838D]">RSI (14)</p>
-                <p id="rsiMetric" class="text-2xl font-black text-[#2ED88A] font-mono mt-1">0.0</p>
-            </div>
-            <div class="emerald-card p-4 rounded-2xl">
-                <p class="text-[10px] font-bold uppercase text-[#7A838D]">Golden Zone (50%-61.8%)</p>
-                <p id="gzMetric" class="text-sm font-bold text-white font-mono mt-2">\$0.00 - \$0.00</p>
-            </div>
-            <div class="emerald-card p-4 rounded-2xl">
-                <p class="text-[10px] font-bold uppercase text-[#7A838D]">GZ Status</p>
-                <div id="statusMetric" class="inline-block mt-2 px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-[#1E232A] text-[#7A838D]">CALCULATING...</div>
-            </div>
+        <!-- TREND STATUS CARD -->
+        <div id="trendCard" class="p-3.5 rounded text-center font-bold text-sm bg-[#00E676]/10 border border-[#00E676] text-[#00E676]">
+            BULLISH TREND (แนวโน้มขาขึ้น)<br>
+            <span class="text-xs font-normal">🚀 ราคาเคลื่อนที่ทำจุดสูงใหม่ (Higher High) และยืนเหนือเส้น EMA</span>
         </div>
 
-        <!-- Navigation Tabs -->
-        <div class="flex border-b border-[#1E232A] gap-4">
-            <button onclick="switchTab('tab-chart')" id="btn-chart" class="px-4 py-2 border-b-2 border-[#2ED88A] text-[#2ED88A] font-bold text-xs uppercase">Technical Chart & RSI</button>
-            <button onclick="switchTab('tab-news')" id="btn-news" class="px-4 py-2 border-b-2 border-transparent text-[#7A838D] hover:text-white font-bold text-xs uppercase">News Sentiment (15 Days)</button>
-            <button onclick="switchTab('tab-screener')" id="btn-screener" class="px-4 py-2 border-b-2 border-transparent text-[#7A838D] hover:text-white font-bold text-xs uppercase">Auto Golden Zone Screener</button>
-        </div>
-
-        <!-- TAB 1: CHART -->
-        <div id="tab-chart" class="emerald-card p-5 rounded-2xl">
-            <h3 class="text-xs font-bold uppercase text-[#7A838D] mb-4">Price Candlestick, EMA20/50 & RSI Subplot</h3>
-            <div id="plotlyChart" class="w-full h-[550px]"></div>
-        </div>
-
-        <!-- TAB 2: NEWS -->
-        <div id="tab-news" class="emerald-card p-5 rounded-2xl hidden space-y-4">
-            <h3 class="text-xs font-bold uppercase text-[#7A838D]">Market News & Sentiment Scraped (Past 15 Days)</h3>
-            <div id="newsContainer" class="space-y-3"></div>
-        </div>
-
-        <!-- TAB 3: SCREENER -->
-        <div id="tab-screener" class="emerald-card p-5 rounded-2xl hidden space-y-4">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-xs font-bold uppercase text-[#7A838D]">Auto Golden Zone Stock Screener</h3>
-                    <p class="text-xs text-white">ค้นหาหุ้นที่กำลังหลุดเข้า Golden Zone ณ ตอนนี้</p>
-                </div>
-                <button onclick="runScreener()" class="bg-[#2ED88A] text-[#07080A] font-bold text-xs uppercase px-4 py-2 rounded-xl">Start Scan</button>
+        <!-- SIGNAL DETECTION -->
+        <div class="emerald-card p-3.5 rounded text-xs">
+            <div class="flex items-center justify-between text-[#7A838D] font-bold mb-1">
+                <span>🔔 BUY SIGNAL DETECTION</span>
+                <span id="sigTicker" class="font-mono">PLTR · 1d</span>
             </div>
-            <div id="screenerResults" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+            <p id="sigText" class="text-[#7A838D]">ยังไม่พบสัญญาณเข้าซื้อ ณ ตอนนี้</p>
+        </div>
+
+        <!-- TAB NAVIGATION -->
+        <div class="flex border-b border-[#1B1F24] text-xs font-black uppercase tracking-wider">
+            <button onclick="switchTab('tech')" id="tabBtnTech" class="px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]">TECHNICAL ANALYSIS & GOLDEN ZONE</button>
+            <button onclick="switchTab('news')" id="tabBtnNews" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white">NEWS SENTIMENT ANALYSIS</button>
+            <button onclick="switchTab('screen')" id="tabBtnScreen" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white">AUTO MARKET SCREENER</button>
+        </div>
+
+        <!-- TAB CONTENT 1: TECHNICAL CHART -->
+        <div id="tabTech" class="emerald-card p-4 rounded">
+            <div id="chartPlot" class="w-full h-[550px]"></div>
+        </div>
+
+        <!-- TAB CONTENT 2: NEWS SENTIMENT -->
+        <div id="tabNews" class="emerald-card p-5 rounded hidden space-y-4">
+            <div class="flex justify-between items-center text-xs font-bold">
+                <span class="uppercase text-white">📰 REAL-TIME MARKET NEWS SENTIMENT (Past 30 Days)</span>
+                <span id="newsOverall" class="text-[#2ED88A]">Overall Sentiment Score: 0.000 → NEUTRAL</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b border-[#1B1F24] text-[#7A838D] uppercase">
+                            <th class="py-2 px-3">TIME</th>
+                            <th class="py-2 px-3">HEADLINE</th>
+                            <th class="py-2 px-3">SENTIMENT</th>
+                            <th class="py-2 px-3">SCORE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="newsTableBody" class="divide-y divide-[#1B1F24]"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB CONTENT 3: AUTO SCREENER -->
+        <div id="tabScreen" class="emerald-card p-5 rounded hidden space-y-4">
+            <div>
+                <h3 class="text-xs font-bold uppercase text-white">🎯 AUTO MARKET GOLDEN ZONE SCREENER</h3>
+                <p class="text-xs text-[#7A838D] mt-1">สแกนหาหุ้นยอดนิยมที่ราคา กำลังหลุดเข้าสู่ Golden Zone (50% – 61.8%) ณ ตอนนี้ทันที</p>
+            </div>
+            
+            <div class="flex gap-3 max-w-md">
+                <select id="marketSelect" class="bg-[#0F1216] border border-[#1E232A] text-white px-3 py-2 rounded text-xs w-full">
+                    <option value="popular">Top 20 Popular Stocks (ไทย & สหรัฐฯ)</option>
+                    <option value="us">US Tech & Growth Giants</option>
+                    <option value="thai">SET50 Big Caps (ไทย)</option>
+                </select>
+                <button onclick="runScreener()" class="bg-[#2ED88A] hover:bg-[#38ef9b] text-[#07080A] font-bold text-xs uppercase px-5 py-2 rounded whitespace-nowrap">START MARKET SCAN</button>
+            </div>
+
+            <div id="screenerOutput" class="text-xs text-[#7A838D]">กดปุ่ม START MARKET SCAN เพื่อเริ่มสแกนหาหุ้นที่เข้า Golden Zone</div>
         </div>
 
     </main>
 
     <script>
-        function switchTab(tabId) {
-            ['tab-chart', 'tab-news', 'tab-screener'].forEach(id => document.getElementById(id).classList.add('hidden'));
-            ['btn-chart', 'btn-news', 'btn-screener'].forEach(id => {
-                document.getElementById(id).className = 'px-4 py-2 border-b-2 border-transparent text-[#7A838D] hover:text-white font-bold text-xs uppercase';
+        let currentData = null;
+
+        function switchTab(tab) {
+            ['tabTech', 'tabNews', 'tabScreen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            ['tabBtnTech', 'tabBtnNews', 'tabBtnScreen'].forEach(id => {
+                document.getElementById(id).className = 'px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white';
             });
-            document.getElementById(tabId).classList.remove('hidden');
-            const btnMap = {'tab-chart': 'btn-chart', 'tab-news': 'btn-news', 'tab-screener': 'btn-screener'};
-            document.getElementById(btnMap[tabId]).className = 'px-4 py-2 border-b-2 border-[#2ED88A] text-[#2ED88A] font-bold text-xs uppercase';
+
+            if (tab === 'tech') {
+                document.getElementById('tabTech').classList.remove('hidden');
+                document.getElementById('tabBtnTech').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]';
+            } else if (tab === 'news') {
+                document.getElementById('tabNews').classList.remove('hidden');
+                document.getElementById('tabBtnNews').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]';
+            } else {
+                document.getElementById('tabScreen').classList.remove('hidden');
+                document.getElementById('tabBtnScreen').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]';
+            }
         }
 
         async function fetchStockData() {
             const ticker = document.getElementById('tickerInput').value || 'PLTR';
-            const res = await fetch(`/api/analyze?ticker=${ticker}`);
-            const data = await res.json();
+            const period = document.getElementById('periodInput').value || '6mo';
+            const interval = document.getElementById('timeframeInput').value || '1d';
 
-            if (data.error) { alert(data.error); return; }
+            document.getElementById('sigTicker').innerText = `${ticker} · ${interval}`;
 
-            document.getElementById('priceMetric').innerText = `$${data.current_price.toFixed(2)}`;
-            document.getElementById('rsiMetric').innerText = data.rsi.toFixed(1);
-            document.getElementById('gzMetric').innerText = `$${data.gz_min.toFixed(2)} - $${data.gz_max.toFixed(2)}`;
-            
-            const statusElem = document.getElementById('statusMetric');
-            if (data.in_gz) {
-                statusElem.innerText = 'IN GOLDEN ZONE';
-                statusElem.className = 'inline-block mt-2 px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-[#2ED88A]/20 border border-[#2ED88A] text-[#2ED88A] animate-pulse';
-            } else {
-                statusElem.innerText = 'OUTSIDE ZONE';
-                statusElem.className = 'inline-block mt-2 px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-[#1E232A] text-[#7A838D]';
-            }
+            try {
+                const res = await fetch(`/api/analyze?ticker=${ticker}&period=${period}&interval=${interval}`);
+                const data = await res.json();
+                if (data.error) { alert(data.error); return; }
 
-            // Draw Plotly Candlestick + RSI Chart
+                currentData = data;
+
+                // Update Metrics
+                document.getElementById('mPrice').innerText = `$${data.current_price.toFixed(2)}`;
+                document.getElementById('mRsi').innerText = data.rsi.toFixed(1);
+                document.getElementById('mDiv').innerText = `${data.div_yield.toFixed(2)}%`;
+                document.getElementById('mGz').innerText = `$${data.gz_min.toFixed(2)} - $${data.gz_max.toFixed(2)}`;
+                
+                const mStatus = document.getElementById('mStatus');
+                if (data.in_gz) {
+                    mStatus.innerText = 'IN ZONE';
+                    mStatus.className = 'text-base font-bold text-[#2ED88A] animate-pulse';
+                } else {
+                    mStatus.innerText = 'OUTSIDE';
+                    mStatus.className = 'text-base font-bold text-[#7A838D]';
+                }
+
+                // Trend Banner
+                const trendCard = document.getElementById('trendCard');
+                if (data.is_uptrend) {
+                    trendCard.className = 'p-3.5 rounded text-center font-bold text-sm bg-[#00E676]/10 border border-[#00E676] text-[#00E676]';
+                    trendCard.innerHTML = `BULLISH TREND (แนวโน้มขาขึ้น)<br><span class="text-xs font-normal">🚀 ราคาเคลื่อนที่ทำจุดสูงใหม่ (Higher High) และยืนเหนือเส้น EMA</span>`;
+                } else {
+                    trendCard.className = 'p-3.5 rounded text-center font-bold text-sm bg-[#FF5252]/10 border border-[#FF5252] text-[#FF5252]';
+                    trendCard.innerHTML = `BEARISH TREND (แนวโน้มขาลง)<br><span class="text-xs font-normal">🔻 ราคาเคลื่อนที่ทำจุดต่ำใหม่ (Lower Low) และอยู่ใต้เส้น EMA</span>`;
+                }
+
+                drawChart();
+                renderNews(data);
+
+            } catch (err) { console.error(err); }
+        }
+
+        function drawChart() {
+            if (!currentData) return;
+            const data = currentData;
+            const showZones = document.getElementById('showZones').checked;
+
             const times = data.chart_data.map(d => d.time);
             const opens = data.chart_data.map(d => d.open);
             const highs = data.chart_data.map(d => d.high);
             const lows = data.chart_data.map(d => d.low);
             const closes = data.chart_data.map(d => d.close);
             const ema20 = data.chart_data.map(d => d.ema20);
+            const ema50 = data.chart_data.map(d => d.ema50);
             const rsi = data.chart_data.map(d => d.rsi);
 
-            const traceCandle = { x: times, open: opens, high: highs, low: lows, close: closes, type: 'candlestick', name: 'Price', xaxis: 'x', yaxis: 'y' };
-            const traceEMA = { x: times, y: ema20, type: 'scatter', mode: 'lines', name: 'EMA 20', line: { color: '#00E5FF' }, xaxis: 'x', yaxis: 'y' };
-            const traceRSI = { x: times, y: rsi, type: 'scatter', mode: 'lines', name: 'RSI (14)', line: { color: '#2ED88A' }, xaxis: 'x', yaxis: 'y2' };
+            const traceCandle = { x: times, open: opens, high: highs, low: lows, close: closes, type: 'candlestick', name: 'Price', increasing: {line: {color: '#00FF00'}}, decreasing: {line: {color: '#FF5252'}} };
+            const traceEMA20 = { x: times, y: ema20, type: 'scatter', mode: 'lines', name: 'EMA 20', line: { color: '#00E5FF', width: 1 } };
+            const traceEMA50 = { x: times, y: ema50, type: 'scatter', mode: 'lines', name: 'EMA 50', line: { color: '#FFEA00', width: 1 } };
+            const traceRSI = { x: times, y: rsi, type: 'scatter', mode: 'lines', name: 'RSI', line: { color: '#00FF00', width: 1.5 }, yaxis: 'y2' };
+
+            const shapes = [{
+                type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: data.gz_min, y1: data.gz_max,
+                fillcolor: '#008000', opacity: 0.25, line: { color: '#00FF00', width: 1, dash: 'dash' }
+            }];
+
+            if (showZones) {
+                shapes.push({
+                    type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: data.supply_bottom, y1: data.supply_top,
+                    fillcolor: '#FF5252', opacity: 0.2, line: { color: '#FF5252', width: 1 }
+                });
+                shapes.push({
+                    type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: data.demand_bottom, y1: data.demand_top,
+                    fillcolor: '#00E676', opacity: 0.2, line: { color: '#00E676', width: 1 }
+                });
+            }
 
             const layout = {
                 grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'top to bottom' },
-                paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+                paper_bgcolor: '#090B0D', plot_bgcolor: '#12161C',
                 font: { color: '#7A838D' },
-                xaxis: { gridcolor: '#1E232A', rangeslider: { visible: false } },
-                yaxis: { title: 'Price', gridcolor: '#1E232A', domain: [0.35, 1] },
-                yaxis2: { title: 'RSI', gridcolor: '#1E232A', domain: [0, 0.25], range: [0, 100] },
-                margin: { t: 10, r: 10, l: 40, b: 20 },
-                shapes: [{
-                    type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: data.gz_min, y1: data.gz_max,
-                    fillcolor: '#2ED88A', opacity: 0.15, line: { width: 0 }, yref: 'y'
-                }]
+                xaxis: { gridcolor: '#1B1F24', rangeslider: { visible: false } },
+                yaxis: { gridcolor: '#1B1F24', domain: [0.3, 1] },
+                yaxis2: { gridcolor: '#1B1F24', domain: [0, 0.2], range: [0, 100] },
+                margin: { t: 20, r: 20, l: 40, b: 20 },
+                shapes: shapes
             };
 
-            Plotly.newPlot('plotlyChart', [traceCandle, traceEMA, traceRSI], layout, {responsive: true});
+            Plotly.newPlot('chartPlot', [traceCandle, traceEMA20, traceEMA50, traceRSI], layout, {responsive: true});
+        }
 
-            // Render 15-Day News
-            const newsContainer = document.getElementById('newsContainer');
-            newsContainer.innerHTML = '';
+        function renderNews(data) {
+            document.getElementById('newsOverall').innerText = `Overall Sentiment Score: ${data.news_avg_score} → ${data.news_overall}`;
+            const tbody = document.getElementById('newsTableBody');
+            tbody.innerHTML = '';
+
             if (data.news && data.news.length > 0) {
                 data.news.forEach(n => {
-                    const color = n.sentiment === 'BULLISH' ? 'text-[#2ED88A]' : (n.sentiment === 'BEARISH' ? 'text-[#FF5252]' : 'text-[#7A838D]');
-                    newsContainer.innerHTML += `
-                        <div class="p-3 bg-[#0F1216] border border-[#1E232A] rounded-xl flex justify-between items-center">
-                            <div>
-                                <p class="text-xs font-bold text-white">${n.headline}</p>
-                                <p class="text-[10px] text-[#7A838D]">${n.time}</p>
-                            </div>
-                            <span class="text-xs font-black ${color}">${n.sentiment} (${n.score})</span>
-                        </div>
+                    const badgeClass = n.sentiment === 'BULLISH' ? 'border-[#00E676] text-[#00E676] bg-[#00E676]/10' : (n.sentiment === 'BEARISH' ? 'border-[#FF5252] text-[#FF5252] bg-[#FF5252]/10' : 'border-[#7A838D] text-[#7A838D]');
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-[#12161C]">
+                            <td class="py-2.5 px-3 text-[#7A838D] whitespace-nowrap">${n.time}</td>
+                            <td class="py-2.5 px-3 font-semibold text-white">${n.headline}</td>
+                            <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded border text-[10px] font-bold ${badgeClass}">${n.sentiment}</span></td>
+                            <td class="py-2.5 px-3 text-white font-mono">${n.score}</td>
+                        </tr>
                     `;
                 });
             } else {
-                newsContainer.innerHTML = '<p class="text-xs text-[#7A838D]">ไม่พบข่าวล่าสุดในรอบ 15 วัน</p>';
+                tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-[#7A838D]">ไม่พบข่าวสารย้อนหลัง</td></tr>';
             }
         }
 
         async function runScreener() {
-            const resContainer = document.getElementById('screenerResults');
-            resContainer.innerHTML = '<p class="text-xs text-[#2ED88A]">กำลังสแกนตลาด...</p>';
-            const res = await fetch('/api/screener?market=popular');
+            const m = document.getElementById('marketSelect').value;
+            const output = document.getElementById('screenerOutput');
+            output.innerHTML = '<span class="text-[#2ED88A]">กำลังสแกนตลาด...</span>';
+
+            const res = await fetch(`/api/screener?market=${m}`);
             const data = await res.json();
-            
-            resContainer.innerHTML = '';
+
             if (data.matched && data.matched.length > 0) {
-                data.matched.forEach(m => {
-                    resContainer.innerHTML += `
-                        <div class="p-4 bg-[#0F1216] border border-[#2ED88A]/30 rounded-xl space-y-1">
-                            <div class="flex justify-between items-center">
-                                <span class="font-bold text-white text-sm">${m.symbol}</span>
-                                <span class="text-xs font-bold text-[#2ED88A]">$${m.price.toFixed(2)}</span>
+                let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">';
+                data.matched.forEach(item => {
+                    html += `
+                        <div class="p-3 bg-[#0F1216] border border-[#2ED88A]/40 rounded flex justify-between items-center">
+                            <div>
+                                <p class="font-bold text-white text-sm">${item.symbol}</p>
+                                <p class="text-[10px] text-[#7A838D]">GZ: $${item.gz_min.toFixed(2)} - $${item.gz_max.toFixed(2)}</p>
                             </div>
-                            <p class="text-[10px] text-[#7A838D]">GZ: $${m.gz_min.toFixed(2)} - $${m.gz_max.toFixed(2)}</p>
-                            <p class="text-[10px] text-[#2ED88A] font-bold">RSI: ${m.rsi} | ${m.trend}</p>
+                            <div class="text-right">
+                                <p class="font-bold text-[#2ED88A]">$${item.price.toFixed(2)}</p>
+                                <p class="text-[10px] text-[#7A838D]">RSI: ${item.rsi} (${item.trend})</p>
+                            </div>
                         </div>
                     `;
                 });
+                html += '</div>';
+                output.innerHTML = html;
             } else {
-                resContainer.innerHTML = '<p class="text-xs text-[#7A838D]">ขณะนี้ยังไม่มีหุ้นในรายการยอดนิยมเข้าสู่ Golden Zone</p>';
+                output.innerHTML = 'ขณะนี้ยังไม่มีหุ้นในรายการยอดนิยมหลุดเข้ามาใน Golden Zone';
             }
         }
 
