@@ -11,7 +11,7 @@ from scipy.signal import find_peaks
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# โหลด NLTK Lexicon
+# โหลด NLTK Lexicon สำหรับวิเคราะห์ Sentiment
 nltk.download("vader_lexicon", quiet=True)
 
 app = Flask(__name__)
@@ -73,7 +73,7 @@ def scrape_news_vader(ticker_symbol):
                     "score": round(score, 2),
                 })
 
-            # เรียงลำดับจากข่าวล่าสุดลงไปหาข่าวเก่าสุด (Most Recent First)
+            # เรียงข่าวล่าสุดลงไปข้างล่าง
             parsed_news = sorted(parsed_news, key=lambda x: x["dt_obj"], reverse=True)[:15]
 
             for n in parsed_news:
@@ -113,7 +113,7 @@ def analyze():
         if df.empty:
             return jsonify({"error": f"ไม่พบข้อมูลสำหรับสัญลักษณ์ {ticker_symbol}"}), 404
 
-        # คำนวณ Dividend Yield
+        # Dividend Yield Calculation
         dividend_yield_pct = 0.0
         try:
             info = ticker_obj.info
@@ -122,6 +122,25 @@ def analyze():
                 dividend_yield_pct = float(div_yield * 100 if div_yield < 1 else div_yield)
         except Exception:
             dividend_yield_pct = 0.0
+
+        # --- 2. DYNAMIC QUARTERLY FINANCIALS (งบรายไตรมาส) ---
+        quarterly_financials = []
+        try:
+            q_df = ticker_obj.quarterly_financials
+            if not q_df.empty:
+                cols = q_df.columns[:4]
+                for col in cols:
+                    date_str = col.strftime("%Y-Q%q") if hasattr(col, "strftime") else str(col)[:10]
+                    rev = float(q_df.loc["Total Revenue", col]) if "Total Revenue" in q_df.index else 0.0
+                    net_inc = float(q_df.loc["Net Income", col]) if "Net Income" in q_df.index else 0.0
+
+                    quarterly_financials.append({
+                        "quarter": date_str,
+                        "revenue": round(rev / 1e6, 2),    # หน่วยล้าน
+                        "net_income": round(net_inc / 1e6, 2)
+                    })
+        except Exception as e:
+            print("Quarterly Financials Error:", e)
 
         df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
         df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
@@ -143,8 +162,6 @@ def analyze():
 
         current_price = float(df["Close"].iloc[-1])
         current_rsi = float(df["RSI"].iloc[-1])
-        current_ema20 = float(df["EMA_20"].iloc[-1]) if not pd.isna(df["EMA_20"].iloc[-1]) else current_price
-        current_ema50 = float(df["EMA_50"].iloc[-1]) if not pd.isna(df["EMA_50"].iloc[-1]) else current_price
 
         gz_min = float(min(gz_top, gz_bottom))
         gz_max = float(max(gz_top, gz_bottom))
@@ -156,7 +173,7 @@ def analyze():
         demand_bottom = float(swing_low)
         demand_top = float(min(df["Open"].iloc[last_l_idx], df["Close"].iloc[last_l_idx]))
 
-        # --- 2. AUTOMATED BUY / SELL SIGNAL DETECTION ENGINE ---
+        # --- 3. SIGNAL DETECTION ENGINE ---
         signal_code = "HOLD"
         signal_text = "ยังไม่พบสัญญาณเทรดที่ชัดเจน ณ ตอนนี้ (เน้นถือหรือรอดูทรง)"
         signal_color = "#7A838D"
@@ -173,20 +190,20 @@ def analyze():
             signal_code = "OVERBOUGHT"
             signal_text = "🔴 OVERBOUGHT: RSI เข้าเขตซื้อมากเกินไป ระวังแรงขายกำไรระยะสั้น"
             signal_color = "#FF5252"
-        elif current_price < current_ema50 and not is_uptrend:
+        elif not is_uptrend and current_price < demand_top:
             signal_code = "BEARISH_DANGER"
-            signal_text = "⚠️ DANGER: หลุดเส้น EMA50 และอยู่ในเทรนด์ขาลง แนะนำหลีกเลี่ยง"
+            signal_text = "⚠️ DANGER: หลุดแนวรับสำคัญและอยู่ในเทรนด์ขาลง แนะนำหลีกเลี่ยง"
             signal_color = "#FF1744"
 
-        # --- 3. AUTO STOP LOSS & TAKE PROFIT RISK MANAGEMENT ---
-        stop_loss = round(demand_bottom * 0.985, 2)  # ตั้ง SL ใต้ Demand Zone 1.5%
-        take_profit = round(supply_top * 0.99, 2)     # ตั้ง TP ใกล้ Supply Zone
+        # --- 4. AUTO STOP LOSS & TAKE PROFIT ---
+        stop_loss = round(demand_bottom * 0.985, 2)
+        take_profit = round(supply_top * 0.99, 2)
 
         risk = current_price - stop_loss
         reward = take_profit - current_price
         rr_ratio = round(reward / risk, 2) if risk > 0 else 0.0
 
-        # --- 4. AI MARKET ASSISTANT SUMMARY GENERATOR ---
+        # --- 5. AI MARKET ASSISTANT SUMMARY GENERATOR ---
         news_data = scrape_news_vader(ticker_symbol)
         avg_score = float(np.mean([n["score"] for n in news_data])) if news_data else 0.0
         overall_sentiment = (
@@ -196,12 +213,12 @@ def analyze():
         )
 
         trend_str = "ขาขึ้น (Bullish)" if is_uptrend else "ขาลง (Bearish)"
-        gz_str = "อยู่ใน Golden Zone" if in_gz else "อยู่นอก Golden Zone"
+        gz_str = "พักตัวเข้าสู่ Golden Zone" if in_gz else "อยู่นอกกรอบ Golden Zone"
+        
         ai_summary = (
-            f"ภาพรวม {ticker_symbol} อยู่ในเทรนด์{trend_str} สถานะราคาปัจจุบัน {gz_str} "
-            f"ที่ระดับ ${current_price:.2f} (RSI {current_rsi:.1f}) "
-            f"ขณะที่ sentiment ข่าวรอบ 30 วันมีมุมมองเป็น {overall_sentiment} (Score: {avg_score:.2f}) "
-            f"แนะนำกรอบความเสี่ยง SL ที่ ${stop_loss:.2f} และเป้าทำกำไร TP ที่ ${take_profit:.2f} (RR: 1:{rr_ratio})"
+            f"{ticker_symbol} มีแนวโน้มภาพรวมเป็น{trend_str} ข่าวรอบ 30 วันมีมุมมอง {overall_sentiment} (Score: +{avg_score:.3f}) "
+            f"ปัจจุบันราคาอยู่ที่ ${current_price:.2f} (RSI {current_rsi:.1f}) {gz_str} "
+            f"แนะนำกรอบบริหารความเสี่ยง SL ที่ ${stop_loss:.2f} และเป้าทำกำไร TP ที่ ${take_profit:.2f} (RR 1:{rr_ratio})"
         )
 
         chart_data = []
@@ -241,6 +258,7 @@ def analyze():
             "news": news_data,
             "news_avg_score": round(avg_score, 3),
             "news_overall": overall_sentiment,
+            "quarterly_financials": quarterly_financials
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
