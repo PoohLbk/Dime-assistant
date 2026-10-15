@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 18% 3%;
+    --foreground: 206 18% 92%;
+    --card: 216 19% 5%;
+    --card-foreground: 206 18% 92%;
+    --popover: 216 19% 5%;
+    --popover-foreground: 206 18% 92%;
+    --primary: 153 69% 51%;
+    --primary-foreground: 152 65% 5%;
+    --secondary: 213 14% 12%;
+    --secondary-foreground: 206 18% 92%;
+    --muted: 210 17% 9%;
+    --muted-foreground: 212 8% 52%;
+    --accent: 213 14% 12%;
+    --accent-foreground: 204 24% 96%;
+    --destructive: 0 100% 66%;
+    --destructive-foreground: 152 65% 5%;
+    --border: 213 14% 12%;
+    --input: 213 14% 12%;
+    --ring: 153 69% 51%;
+    --chart-1: 153 69% 51%;
+    --chart-2: 186 100% 50%;
+    --chart-3: 55 100% 50%;
+    --chart-4: 0 100% 66%;
+    --chart-5: 151 100% 45%;
+    --radius: 0.5rem;
+    --font-heading: ui-sans-serif, system-ui, sans-serif;
+    --font-body: ui-sans-serif, system-ui, sans-serif;
+    --font-display: ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --sidebar-background: 220 18% 3%;
+    --sidebar-foreground: 206 18% 92%;
+    --sidebar-primary: 153 69% 51%;
+    --sidebar-primary-foreground: 152 65% 5%;
+    --sidebar-accent: 213 14% 12%;
+    --sidebar-accent-foreground: 204 24% 96%;
+    --sidebar-border: 213 14% 12%;
+    --sidebar-ring: 153 69% 51%;
+  }
+
+  .dark {
+    --background: 220 18% 3%;
+    --foreground: 206 18% 92%;
+    --card: 216 19% 5%;
+    --card-foreground: 206 18% 92%;
+    --popover: 216 19% 5%;
+    --popover-foreground: 206 18% 92%;
+    --primary: 153 69% 51%;
+    --primary-foreground: 152 65% 5%;
+    --secondary: 213 14% 12%;
+    --secondary-foreground: 206 18% 92%;
+    --muted: 210 17% 9%;
+    --muted-foreground: 212 8% 52%;
+    --accent: 213 14% 12%;
+    --accent-foreground: 204 24% 96%;
+    --destructive: 0 100% 66%;
+    --destructive-foreground: 152 65% 5%;
+    --border: 213 14% 12%;
+    --input: 213 14% 12%;
+    --ring: 153 69% 51%;
+    --chart-1: 153 69% 51%;
+    --chart-2: 186 100% 50%;
+    --chart-3: 55 100% 50%;
+    --chart-4: 0 100% 66%;
+    --chart-5: 151 100% 45%;
+    --sidebar-background: 220 18% 3%;
+    --sidebar-foreground: 206 18% 92%;
+    --sidebar-primary: 153 69% 51%;
+    --sidebar-primary-foreground: 152 65% 5%;
+    --sidebar-accent: 213 14% 12%;
+    --sidebar-accent-foreground: 204 24% 96%;
+    --sidebar-border: 213 14% 12%;
+    --sidebar-ring: 153 69% 51%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased selection:bg-[#2ED88A]/30 selection:text-[#2ED88A];
+  }
+}
+
+/* Custom Emerald Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #07080A;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E232A;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2ED88A;
+}
+
+/* Obsidian Terminal — Animations */
+@keyframes em-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes em-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes em-scan {
+  0% { top: 0; opacity: 1; }
+  100% { top: 100%; opacity: 0.2; }
+}
+@keyframes em-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(46, 216, 138, 0); }
+  50% { box-shadow: 0 0 14px rgba(46, 216, 138, 0.45); }
+}
+@keyframes em-spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-em-fade { animation: em-fade 0.7s ease both; }
+.animate-em-rise { animation: em-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.animate-em-scan { animation: em-scan 1.6s ease-in-out 0.5s 1 both; }
+.animate-em-pulse { animation: em-pulse 3s ease-in-out infinite; }
+.animate-em-spin { animation: em-spin 1s linear infinite; }
