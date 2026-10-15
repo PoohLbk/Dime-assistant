@@ -11,7 +11,7 @@ from scipy.signal import find_peaks
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# โหลด NLTK Lexicon สำหรับวิเคราะห์ Sentiment
+# โหลด NLTK Lexicon
 nltk.download("vader_lexicon", quiet=True)
 
 app = Flask(__name__)
@@ -26,7 +26,7 @@ def calculate_rsi(series, period=14):
     return 100 - (100 / (1 + rs))
 
 
-# --- SCRAPE NEWS & SORT BY DATE (MOST RECENT FIRST) ---
+# --- 1. SCRAPE NEWS & SORT BY DATE (MOST RECENT FIRST) ---
 def scrape_news_vader(ticker_symbol):
     ticker_map = {
         "GC=F": "Gold market",
@@ -51,7 +51,6 @@ def scrape_news_vader(ticker_symbol):
                 )
                 raw_date = item.find("pubDate").text
 
-                # แปลงข้อความวันที่เป็น Object Datetime สำหรับการจัดเรียง
                 dt_obj = datetime.min
                 try:
                     dt_obj = datetime.strptime(raw_date[5:25], "%d %b %Y %H:%M:%S")
@@ -67,17 +66,16 @@ def scrape_news_vader(ticker_symbol):
                 )
 
                 parsed_news.append({
-                    "dt_obj": dt_obj,  # ใช้สำหรับ Sort ข่าว
+                    "dt_obj": dt_obj,
                     "time": formatted_time,
                     "headline": clean_title,
                     "sentiment": sentiment,
                     "score": round(score, 2),
                 })
 
-            # 📌 จัดเรียงจากข่าวล่าสุดลงไปหาข่าวเก่าสุด (Most Recent First)
+            # เรียงลำดับจากข่าวล่าสุดลงไปหาข่าวเก่าสุด (Most Recent First)
             parsed_news = sorted(parsed_news, key=lambda x: x["dt_obj"], reverse=True)[:15]
 
-            # ลบ Key dt_obj ออกก่อนส่งผลลัพธ์เป็น JSON
             for n in parsed_news:
                 del n["dt_obj"]
 
@@ -145,6 +143,9 @@ def analyze():
 
         current_price = float(df["Close"].iloc[-1])
         current_rsi = float(df["RSI"].iloc[-1])
+        current_ema20 = float(df["EMA_20"].iloc[-1]) if not pd.isna(df["EMA_20"].iloc[-1]) else current_price
+        current_ema50 = float(df["EMA_50"].iloc[-1]) if not pd.isna(df["EMA_50"].iloc[-1]) else current_price
+
         gz_min = float(min(gz_top, gz_bottom))
         gz_max = float(max(gz_top, gz_bottom))
         in_gz = bool(gz_min <= current_price <= gz_max)
@@ -154,6 +155,54 @@ def analyze():
         supply_bottom = float(max(df["Open"].iloc[last_h_idx], df["Close"].iloc[last_h_idx]))
         demand_bottom = float(swing_low)
         demand_top = float(min(df["Open"].iloc[last_l_idx], df["Close"].iloc[last_l_idx]))
+
+        # --- 2. AUTOMATED BUY / SELL SIGNAL DETECTION ENGINE ---
+        signal_code = "HOLD"
+        signal_text = "ยังไม่พบสัญญาณเทรดที่ชัดเจน ณ ตอนนี้ (เน้นถือหรือรอดูทรง)"
+        signal_color = "#7A838D"
+
+        if in_gz and current_rsi <= 48 and is_uptrend:
+            signal_code = "STRONG_BUY"
+            signal_text = "🟢 STRONG BUY: ราคาอยู่ใน Golden Zone + RSI พักตัว + โครงสร้างขาขึ้น"
+            signal_color = "#00E676"
+        elif in_gz and is_uptrend:
+            signal_code = "BUY"
+            signal_text = "🟢 BUY SIGNAL: ราคาหลุดเข้าสู่ Golden Zone ในเทรนด์ขาขึ้น"
+            signal_color = "#2ED88A"
+        elif current_rsi >= 70:
+            signal_code = "OVERBOUGHT"
+            signal_text = "🔴 OVERBOUGHT: RSI เข้าเขตซื้อมากเกินไป ระวังแรงขายกำไรระยะสั้น"
+            signal_color = "#FF5252"
+        elif current_price < current_ema50 and not is_uptrend:
+            signal_code = "BEARISH_DANGER"
+            signal_text = "⚠️ DANGER: หลุดเส้น EMA50 และอยู่ในเทรนด์ขาลง แนะนำหลีกเลี่ยง"
+            signal_color = "#FF1744"
+
+        # --- 3. AUTO STOP LOSS & TAKE PROFIT RISK MANAGEMENT ---
+        stop_loss = round(demand_bottom * 0.985, 2)  # ตั้ง SL ใต้ Demand Zone 1.5%
+        take_profit = round(supply_top * 0.99, 2)     # ตั้ง TP ใกล้ Supply Zone
+
+        risk = current_price - stop_loss
+        reward = take_profit - current_price
+        rr_ratio = round(reward / risk, 2) if risk > 0 else 0.0
+
+        # --- 4. AI MARKET ASSISTANT SUMMARY GENERATOR ---
+        news_data = scrape_news_vader(ticker_symbol)
+        avg_score = float(np.mean([n["score"] for n in news_data])) if news_data else 0.0
+        overall_sentiment = (
+            "OVERALL BULLISH"
+            if avg_score >= 0.05
+            else ("OVERALL BEARISH" if avg_score <= -0.05 else "NEUTRAL")
+        )
+
+        trend_str = "ขาขึ้น (Bullish)" if is_uptrend else "ขาลง (Bearish)"
+        gz_str = "อยู่ใน Golden Zone" if in_gz else "อยู่นอก Golden Zone"
+        ai_summary = (
+            f"ภาพรวม {ticker_symbol} อยู่ในเทรนด์{trend_str} สถานะราคาปัจจุบัน {gz_str} "
+            f"ที่ระดับ ${current_price:.2f} (RSI {current_rsi:.1f}) "
+            f"ขณะที่ sentiment ข่าวรอบ 30 วันมีมุมมองเป็น {overall_sentiment} (Score: {avg_score:.2f}) "
+            f"แนะนำกรอบความเสี่ยง SL ที่ ${stop_loss:.2f} และเป้าทำกำไร TP ที่ ${take_profit:.2f} (RR: 1:{rr_ratio})"
+        )
 
         chart_data = []
         for idx, row in df.iterrows():
@@ -168,14 +217,6 @@ def analyze():
                 "rsi": float(row["RSI"]) if not pd.isna(row["RSI"]) else None,
             })
 
-        news_data = scrape_news_vader(ticker_symbol)
-        avg_score = float(np.mean([n["score"] for n in news_data])) if news_data else 0.0
-        overall_sentiment = (
-            "OVERALL BULLISH"
-            if avg_score >= 0.05
-            else ("OVERALL BEARISH" if avg_score <= -0.05 else "NEUTRAL")
-        )
-
         return jsonify({
             "ticker": ticker_symbol,
             "current_price": current_price,
@@ -189,6 +230,13 @@ def analyze():
             "supply_bottom": supply_bottom,
             "demand_top": demand_top,
             "demand_bottom": demand_bottom,
+            "signal_code": signal_code,
+            "signal_text": signal_text,
+            "signal_color": signal_color,
+            "stop_loss": stop_loss,
+            "take_profit": take_profit,
+            "rr_ratio": rr_ratio,
+            "ai_summary": ai_summary,
             "chart_data": chart_data,
             "news": news_data,
             "news_avg_score": round(avg_score, 3),
