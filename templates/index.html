@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMERALD | Ultimate Analytics</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Plotly.js CDN สำหรับวาดกราฟราคา -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #07080A;
+            color: #D9DEE3;
+        }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .emerald-glow {
+            box-shadow: 0 0 25px rgba(46, 216, 138, 0.15);
+        }
+        .emerald-card {
+            background: rgba(12, 15, 18, 0.8);
+            border: 1px solid #1E232A;
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-[#2ED88A]/30 selection:text-[#2ED88A]">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-[#1E232A] bg-[#0A0D10]/90 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-[#2ED88A]/10 border border-[#2ED88A]/40 flex items-center justify-center text-[#2ED88A] emerald-glow">
+                ⚡
+            </div>
+            <div>
+                <h1 class="text-lg font-extrabold tracking-wider text-white">EMERALD <span class="text-[#2ED88A]">ANALYTICS</span></h1>
+                <p class="text-[10px] uppercase tracking-widest text-[#7A838D] font-bold">Golden Zone & RSI Intelligence</p>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="flex items-center gap-2">
+            <input type="text" id="tickerInput" value="PLTR" class="bg-[#0F1216] border border-[#1E232A] text-white px-4 py-2 rounded-xl text-sm font-mono focus:outline-none focus:border-[#2ED88A] transition-all uppercase w-32 md:w-48" placeholder="SYMBOL...">
+            <button onclick="fetchStockData()" class="bg-[#2ED88A] hover:bg-[#38ef9b] text-[#07080A] font-bold text-xs uppercase px-5 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(46,216,138,0.25)] active:scale-95">
+                Analyze
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+
+        <!-- Metrics Cards Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="emerald-card p-4 rounded-2xl">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-[#7A838D]">Last Price</p>
+                <p id="priceMetric" class="text-2xl font-black text-white font-mono mt-1">\$0.00</p>
+            </div>
+            <div class="emerald-card p-4 rounded-2xl">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-[#7A838D]">RSI (14)</p>
+                <p id="rsiMetric" class="text-2xl font-black text-[#2ED88A] font-mono mt-1">0.0</p>
+            </div>
+            <div class="emerald-card p-4 rounded-2xl">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-[#7A838D]">Golden Zone Range</p>
+                <p id="gzMetric" class="text-lg font-bold text-white font-mono mt-1.5">\$0.00 - \$0.00</p>
+            </div>
+            <div class="emerald-card p-4 rounded-2xl">
+                <p class="text-[10px] font-bold uppercase tracking-wider text-[#7A838D]">GZ Status</p>
+                <div id="statusMetric" class="inline-block mt-2 px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-[#1E232A] text-[#7A838D]">
+                    CALCULATING...
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Chart Panel -->
+        <div class="emerald-card p-5 rounded-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-[#7A838D]">Technical Chart & Golden Zone Layer</h3>
+                <div class="flex gap-2 text-xs">
+                    <button class="px-3 py-1 rounded-lg bg-[#1E232A] text-white hover:text-[#2ED88A]">1D</button>
+                    <button class="px-3 py-1 rounded-lg bg-[#1E232A] text-white hover:text-[#2ED88A]">1WK</button>
+                </div>
+            </div>
+            <!-- Plotly Container -->
+            <div id="plotlyChart" class="w-full h-[500px]"></div>
+        </div>
+    </main>
+
+    <!-- Client-side Logic -->
+    <script>
+        async function fetchStockData() {
+            const ticker = document.getElementById('tickerInput').value || 'PLTR';
+            
+            try {
+                const res = await fetch(`/api/analyze?ticker=${ticker}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                // Update Metrics
+                document.getElementById('priceMetric').innerText = `$${data.current_price.toFixed(2)}`;
+                document.getElementById('rsiMetric').innerText = data.rsi.toFixed(1);
+                document.getElementById('gzMetric').innerText = `$${data.gz_min.toFixed(2)} - $${data.gz_max.toFixed(2)}`;
+                
+                const statusElem = document.getElementById('statusMetric');
+                if (data.in_gz) {
+                    statusElem.innerText = 'IN GOLDEN ZONE';
+                    statusElem.className = 'inline-block mt-2 px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-[#2ED88A]/20 border border-[#2ED88A] text-[#2ED88A] animate-pulse';
+                } else {
+                    statusElem.innerText = 'OUTSIDE ZONE';
+                    statusElem.className = 'inline-block mt-2 px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-[#1E232A] text-[#7A838D]';
+                }
+
+                // Draw Plotly Chart
+                const times = data.chart_data.map(d => d.time);
+                const closes = data.chart_data.map(d => d.close);
+                const ema20 = data.chart_data.map(d => d.ema20);
+
+                const tracePrice = {
+                    x: times,
+                    y: closes,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Close Price',
+                    line: { color: '#F2F5F7', width: 2 }
+                };
+
+                const traceEMA = {
+                    x: times,
+                    y: ema20,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'EMA 20',
+                    line: { color: '#00E5FF', width: 1.5 }
+                };
+
+                const layout = {
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    font: { color: '#7A838D' },
+                    margin: { t: 10, r: 10, l: 40, b: 40 },
+                    xaxis: { gridcolor: '#1E232A' },
+                    yaxis: { gridcolor: '#1E232A' },
+                    shapes: [{
+                        type: 'rect',
+                        xref: 'paper',
+                        x0: 0,
+                        x1: 1,
+                        y0: data.gz_min,
+                        y1: data.gz_max,
+                        fillcolor: '#2ED88A',
+                        opacity: 0.15,
+                        line: { width: 0 }
+                    }]
+                };
+
+                Plotly.newPlot('plotlyChart', [tracePrice, traceEMA], layout, {responsive: true});
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Auto Load on Start
+        fetchStockData();
+    </script>
+</body>
+</html>
