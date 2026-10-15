@@ -11,7 +11,6 @@ from scipy.signal import find_peaks
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# โหลด NLTK Lexicon
 nltk.download("vader_lexicon", quiet=True)
 
 app = Flask(__name__)
@@ -24,57 +23,49 @@ def calculate_rsi(series, period=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-# --- HELPER: SCRAPE NEWS 15 DAYS ---
 def scrape_news_vader(ticker_symbol):
     ticker_map = {
-        "GC=F": "Gold market inflation economy",
-        "XAUUSD": "Gold market inflation economy",
-        "SI=F": "Silver market",
-        "BTC-USD": "Bitcoin crypto economy",
+        "GC=F": "Gold market", "XAUUSD": "Gold market",
+        "SI=F": "Silver market", "BTC-USD": "Bitcoin",
     }
-    search_term = ticker_map.get(ticker_symbol.upper().strip(), f"{ticker_symbol} stock economy")
+    search_term = ticker_map.get(ticker_symbol.upper().strip(), ticker_symbol)
     parsed_news = []
 
     try:
-        # ดึงข่าวย้อนหลัง 15 วัน (when:15d)
-        rss_url = f"https://news.google.com/rss/search?q={search_term}+when:15d&hl=en-US&gl=US&ceid=US:en"
+        rss_url = f"https://news.google.com/rss/search?q={search_term}+stock+when:30d&hl=en-US&gl=US&ceid=US:en"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         res = requests.get(rss_url, headers=headers, timeout=5)
 
         if res.status_code == 200:
             root = ET.fromstring(res.content)
-            for item in root.findall(".//item")[:20]:
+            for item in root.findall(".//item")[:15]:
                 title = item.find("title").text
                 clean_title = title.rsplit(" - ", 1)[0] if " - " in title else title
                 raw_date = item.find("pubDate").text
                 
                 try:
                     dt_obj = datetime.strptime(raw_date[5:25], "%d %b %Y %H:%M:%S")
-                    formatted_time = dt_obj.strftime("%b %d, %H:%M")
+                    formatted_time = dt_obj.strftime("%b-%d %I:%M%p")
                 except Exception:
                     formatted_time = raw_date[5:22]
-                    dt_obj = datetime.min
 
                 score = float(sia.polarity_scores(clean_title)["compound"])
                 sentiment = "BULLISH" if score >= 0.05 else ("BEARISH" if score <= -0.05 else "NEUTRAL")
 
                 parsed_news.append({
-                    "dt": dt_obj.strftime("%Y-%m-%d %H:%M:%S"),
                     "time": formatted_time,
                     "headline": clean_title,
                     "sentiment": sentiment,
-                    "score": score
+                    "score": round(score, 2)
                 })
     except Exception as e:
-        print("News error:", e)
+        print("News Error:", e)
 
     return parsed_news
-
 
 @app.route("/")
 def home():
     return render_template("index.html")
-
 
 @app.route("/api/analyze")
 def analyze():
@@ -83,12 +74,8 @@ def analyze():
     interval = request.args.get("interval", "1d")
 
     ticker_map = {
-        "XAUUSD": "GC=F",
-        "XAU/USD": "GC=F",
-        "GOLD": "GC=F",
-        "SILVER": "SI=F",
-        "BTCUSD": "BTC-USD",
-        "ETHUSD": "ETH-USD",
+        "XAUUSD": "GC=F", "XAU/USD": "GC=F", "GOLD": "GC=F",
+        "SILVER": "SI=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
     }
     clean_symbol = ticker_map.get(ticker_symbol, ticker_symbol)
 
@@ -98,6 +85,16 @@ def analyze():
 
         if df.empty:
             return jsonify({"error": f"ไม่พบข้อมูลสำหรับสัญลักษณ์ {ticker_symbol}"}), 404
+
+        # Dividend Yield Calculation
+        dividend_yield_pct = 0.0
+        try:
+            info = ticker_obj.info
+            div_yield = info.get("dividendYield") or info.get("yield")
+            if div_yield is not None:
+                dividend_yield_pct = float(div_yield * 100 if div_yield < 1 else div_yield)
+        except Exception:
+            dividend_yield_pct = 0.0
 
         df["EMA_20"] = df["Close"].ewm(span=20, adjust=False).mean()
         df["EMA_50"] = df["Close"].ewm(span=50, adjust=False).mean()
@@ -121,8 +118,13 @@ def analyze():
         current_rsi = float(df["RSI"].iloc[-1])
         gz_min = float(min(gz_top, gz_bottom))
         gz_max = float(max(gz_top, gz_bottom))
-        
         in_gz = bool(gz_min <= current_price <= gz_max)
+
+        # Supply / Demand Zones
+        supply_top = float(swing_high)
+        supply_bottom = float(max(df["Open"].iloc[last_h_idx], df["Close"].iloc[last_h_idx]))
+        demand_bottom = float(swing_low)
+        demand_top = float(min(df["Open"].iloc[last_l_idx], df["Close"].iloc[last_l_idx]))
 
         chart_data = []
         for idx, row in df.iterrows():
@@ -137,23 +139,30 @@ def analyze():
                 "rsi": float(row["RSI"]) if not pd.isna(row["RSI"]) else None,
             })
 
-        # ดึงข่าวย้อนหลัง 15 วัน
         news_data = scrape_news_vader(ticker_symbol)
+        avg_score = float(np.mean([n["score"] for n in news_data])) if news_data else 0.0
+        overall_sentiment = "OVERALL BULLISH" if avg_score >= 0.05 else ("OVERALL BEARISH" if avg_score <= -0.05 else "NEUTRAL")
 
         return jsonify({
             "ticker": ticker_symbol,
             "current_price": current_price,
             "rsi": current_rsi,
+            "div_yield": dividend_yield_pct,
             "in_gz": in_gz,
             "gz_min": gz_min,
             "gz_max": gz_max,
             "is_uptrend": is_uptrend,
+            "supply_top": supply_top,
+            "supply_bottom": supply_bottom,
+            "demand_top": demand_top,
+            "demand_bottom": demand_bottom,
             "chart_data": chart_data,
-            "news": news_data
+            "news": news_data,
+            "news_avg_score": round(avg_score, 3),
+            "news_overall": overall_sentiment
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route("/api/screener")
 def screener():
@@ -184,7 +193,7 @@ def screener():
 
             sh, sl, cp = highs[lh], lows[ll], closes[-1]
             diff = sh - sl
-            uptrend = lh > ll
+            uptrend = bool(lh > ll)
 
             gz_top = (sh - (0.500 * diff)) if uptrend else (sl + (0.618 * diff))
             gz_bottom = (sh - (0.618 * diff)) if uptrend else (sl + (0.500 * diff))
@@ -205,7 +214,6 @@ def screener():
             continue
 
     return jsonify({"matched": matched})
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
