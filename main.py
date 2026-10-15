@@ -65,7 +65,9 @@ def analyze():
         last_l_idx = peaks_low[-1] if len(peaks_low) > 0 else np.argmin(lows)
         swing_high, swing_low = highs[last_h_idx], lows[last_l_idx]
         diff = swing_high - swing_low
-        is_uptrend = last_h_idx > last_l_idx
+        
+        # แปลง numpy.bool_ เป็น bool แบบ Python
+        is_uptrend = bool(last_h_idx > last_l_idx)
 
         gz_top = (
             swing_high - (0.500 * diff)
@@ -82,7 +84,9 @@ def analyze():
         current_rsi = float(df["RSI"].iloc[-1])
         gz_min = float(min(gz_top, gz_bottom))
         gz_max = float(max(gz_top, gz_bottom))
-        in_gz = gz_min <= current_price <= gz_max
+        
+        # แปลง numpy.bool_ เป็น bool แบบ Python
+        in_gz = bool(gz_min <= current_price <= gz_max)
 
         # ฟอร์แมตข้อมูลสำหรับกราฟ
         chart_data = []
@@ -112,8 +116,6 @@ def analyze():
         return jsonify({"error": str(e)}), 500
 
 
-# --- ปรับแต่งส่วนรันเซิร์ฟเวอร์เพื่อดึงพอร์ตอัตโนมัติบน Render ---
 if __name__ == "__main__":
-    # ดึงค่า PORT จาก Environment Variable ของ Render (ถ้าไม่มีในเครื่องโลคอลจะใช้ 5000)
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
