@@ -11,9 +11,7 @@
         body { font-family: 'JetBrains Mono', monospace; background-color: #07080A; color: #D9DEE3; }
         .emerald-border { border: 1px solid #1B1F24; }
         .emerald-card { background: rgba(9, 11, 13, 0.85); border: 1px solid #1B1F24; backdrop-filter: blur(8px); }
-        .emerald-accent { color: #2ED88A; }
         
-        /* Video Background Styling */
         #bgVideo {
             position: fixed;
             right: 0;
@@ -83,7 +81,7 @@
                 UPDATE ANALYSIS
             </button>
 
-            <!-- FEATURE 4: WATCHLIST & PORTFOLIO TRACKER -->
+            <!-- WATCHLIST & PORTFOLIO TRACKER -->
             <hr class="border-[#1E232A]">
             <div>
                 <div class="flex justify-between items-center mb-2">
@@ -153,7 +151,7 @@
             </div>
         </div>
 
-        <!-- FEATURE 5: AI MARKET ASSISTANT SUMMARY BOX -->
+        <!-- AI MARKET ASSISTANT SUMMARY BOX -->
         <div class="emerald-card p-3.5 rounded border-l-4 border-l-[#2ED88A] bg-[#2ED88A]/[0.03]">
             <div class="flex items-center gap-2 mb-1">
                 <span class="text-xs">🤖</span>
@@ -183,10 +181,11 @@
         </div>
 
         <!-- TAB NAVIGATION -->
-        <div class="flex border-b border-[#1B1F24] text-xs font-black uppercase tracking-wider backdrop-blur-md">
-            <button onclick="switchTab('tech')" id="tabBtnTech" class="px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]">TECHNICAL ANALYSIS & GOLDEN ZONE</button>
-            <button onclick="switchTab('news')" id="tabBtnNews" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white">NEWS SENTIMENT ANALYSIS</button>
-            <button onclick="switchTab('screen')" id="tabBtnScreen" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white">AUTO MARKET SCREENER</button>
+        <div class="flex border-b border-[#1B1F24] text-xs font-black uppercase tracking-wider backdrop-blur-md overflow-x-auto">
+            <button onclick="switchTab('tech')" id="tabBtnTech" class="px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A] whitespace-nowrap">TECHNICAL ANALYSIS & GOLDEN ZONE</button>
+            <button onclick="switchTab('news')" id="tabBtnNews" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white whitespace-nowrap">NEWS SENTIMENT ANALYSIS</button>
+            <button onclick="switchTab('earnings')" id="tabBtnEarnings" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white whitespace-nowrap">QUARTERLY FINANCIALS</button>
+            <button onclick="switchTab('screen')" id="tabBtnScreen" class="px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white whitespace-nowrap">AUTO MARKET SCREENER</button>
         </div>
 
         <!-- TAB CONTENT 1: TECHNICAL CHART -->
@@ -215,7 +214,28 @@
             </div>
         </div>
 
-        <!-- TAB CONTENT 3: AUTO SCREENER -->
+        <!-- TAB CONTENT 3: QUARTERLY FINANCIALS -->
+        <div id="tabEarnings" class="emerald-card p-5 rounded hidden space-y-4">
+            <div class="flex justify-between items-center text-xs font-bold">
+                <span class="uppercase text-white">📊 QUARTERLY REVENUE & NET INCOME (Past 4 Quarters)</span>
+                <span class="text-[#7A838D]">Unit: Millions (M)</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="border-b border-[#1B1F24] text-[#7A838D] uppercase">
+                            <th class="py-2.5 px-3">QUARTER</th>
+                            <th class="py-2.5 px-3">TOTAL REVENUE (\$M)</th>
+                            <th class="py-2.5 px-3">NET INCOME (\$M)</th>
+                            <th class="py-2.5 px-3">PROFIT MARGIN</th>
+                        </tr>
+                    </thead>
+                    <tbody id="earningsTableBody" class="divide-y divide-[#1B1F24]"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB CONTENT 4: AUTO SCREENER -->
         <div id="tabScreen" class="emerald-card p-5 rounded hidden space-y-4">
             <div>
                 <h3 class="text-xs font-bold uppercase text-white">🎯 AUTO MARKET GOLDEN ZONE SCREENER</h3>
@@ -263,7 +283,7 @@
         }
 
         function updateStarState() {
-            const currentSymbol = document.getElementById('tickerInput').value.toUpperCase().strip();
+            const currentSymbol = document.getElementById('tickerInput').value.toUpperCase().trim();
             const starBtn = document.getElementById('starBtn');
             if (watchlist.includes(currentSymbol)) {
                 starBtn.classList.add('text-[#FFEA00]');
@@ -275,7 +295,7 @@
         }
 
         function toggleFavorite() {
-            const currentSymbol = document.getElementById('tickerInput').value.upperCase().strip();
+            const currentSymbol = document.getElementById('tickerInput').value.toUpperCase().trim();
             if (!currentSymbol) return;
 
             const index = watchlist.indexOf(currentSymbol);
@@ -301,20 +321,23 @@
         }
 
         function switchTab(tab) {
-            ['tabTech', 'tabNews', 'tabScreen'].forEach(id => document.getElementById(id).classList.add('hidden'));
-            ['tabBtnTech', 'tabBtnNews', 'tabBtnScreen'].forEach(id => {
-                document.getElementById(id).className = 'px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white';
+            ['tabTech', 'tabNews', 'tabEarnings', 'tabScreen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            ['tabBtnTech', 'tabBtnNews', 'tabBtnEarnings', 'tabBtnScreen'].forEach(id => {
+                document.getElementById(id).className = 'px-4 py-3 border-b-2 border-transparent text-[#7A838D] hover:text-white whitespace-nowrap';
             });
 
             if (tab === 'tech') {
                 document.getElementById('tabTech').classList.remove('hidden');
-                document.getElementById('tabBtnTech').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]';
+                document.getElementById('tabBtnTech').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A] whitespace-nowrap';
             } else if (tab === 'news') {
                 document.getElementById('tabNews').classList.remove('hidden');
-                document.getElementById('tabBtnNews').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]';
+                document.getElementById('tabBtnNews').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A] whitespace-nowrap';
+            } else if (tab === 'earnings') {
+                document.getElementById('tabEarnings').classList.remove('hidden');
+                document.getElementById('tabBtnEarnings').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A] whitespace-nowrap';
             } else {
                 document.getElementById('tabScreen').classList.remove('hidden');
-                document.getElementById('tabBtnScreen').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A]';
+                document.getElementById('tabBtnScreen').className = 'px-4 py-3 border-b-2 border-[#2ED88A] text-[#2ED88A] whitespace-nowrap';
             }
         }
 
@@ -359,6 +382,7 @@
 
                 drawChart();
                 renderNews(data);
+                renderEarnings(data);
 
             } catch (err) { console.error(err); }
         }
@@ -431,6 +455,29 @@
                 });
             } else {
                 tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-[#7A838D]">ไม่พบข่าวสารย้อนหลัง</td></tr>';
+            }
+        }
+
+        function renderEarnings(data) {
+            const tbody = document.getElementById('earningsTableBody');
+            tbody.innerHTML = '';
+
+            if (data.quarterly_financials && data.quarterly_financials.length > 0) {
+                data.quarterly_financials.forEach(q => {
+                    const margin = q.revenue > 0 ? ((q.net_income / q.revenue) * 100).toFixed(1) : 'N/A';
+                    const incomeColor = q.net_income >= 0 ? 'text-[#00E676]' : 'text-[#FF5252]';
+                    
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-[#12161C]">
+                            <td class="py-2.5 px-3 font-bold text-white">${q.quarter}</td>
+                            <td class="py-2.5 px-3 font-mono text-white">$${q.revenue.toLocaleString()} M</td>
+                            <td class="py-2.5 px-3 font-mono font-bold ${incomeColor}">$${q.net_income.toLocaleString()} M</td>
+                            <td class="py-2.5 px-3 font-mono text-[#2ED88A]">${margin}%</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-[#7A838D]">ไม่พบข้อมูลสถิติงบรายไตรมาส</td></tr>';
             }
         }
 
