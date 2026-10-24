@@ -28,35 +28,62 @@ def calculate_rsi(series, period=14):
 
 # --- 1. SCRAPE NEWS & SORT BY DATE (MOST RECENT FIRST) ---
 def scrape_news_vader(ticker_symbol):
+    # แมปชื่อบริษัทเพื่อให้ค้นหาข่าวใน Google News RSS ได้แม่นยำขึ้น
     ticker_map = {
-        "GC=F": "Gold market",
-        "XAUUSD": "Gold market",
+        "MU": "Micron Technology",
+        "PLTR": "Palantir Technologies",
+        "NVDA": "NVIDIA",
+        "AAPL": "Apple",
+        "MSFT": "Microsoft",
+        "AMZN": "Amazon",
+        "GOOGL": "Alphabet Google",
+        "META": "Meta Platforms",
+        "TSLA": "Tesla",
+        "AMD": "AMD",
+        "GC=F": "Gold market inflation",
+        "XAUUSD": "Gold market inflation",
         "SI=F": "Silver market",
-        "BTC-USD": "Bitcoin",
+        "BTC-USD": "Bitcoin crypto",
     }
-    search_term = ticker_map.get(ticker_symbol.upper().strip(), ticker_symbol)
+    
+    clean_ticker = ticker_symbol.upper().strip()
+    search_term = ticker_map.get(clean_ticker, f"{clean_ticker} stock")
     parsed_news = []
 
     try:
-        rss_url = f"https://news.google.com/rss/search?q={search_term}+stock+when:30d&hl=en-US&gl=US&ceid=US:en"
+        # ดึง RSS โดยไม่ใช้ query constraint ซ้อน เพื่อป้องกันการได้ผลลัพธ์ว่างเปล่า
+        rss_url = f"https://news.google.com/rss/search?q={search_term}&hl=en-US&gl=US&ceid=US:en"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         res = requests.get(rss_url, headers=headers, timeout=5)
 
         if res.status_code == 200:
             root = ET.fromstring(res.content)
             for item in root.findall(".//item"):
-                title = item.find("title").text
+                title_elem = item.find("title")
+                pubdate_elem = item.find("pubDate")
+
+                if title_elem is None or pubdate_elem is None:
+                    continue
+
+                title = title_elem.text
                 clean_title = (
                     title.rsplit(" - ", 1)[0] if " - " in title else title
                 )
-                raw_date = item.find("pubDate").text
+                raw_date = pubdate_elem.text
 
                 dt_obj = datetime.min
+                formatted_time = raw_date
+                
+                # แปลงรูปแบบวันที่จาก Google News RSS อย่างยืดหยุ่น
                 try:
                     dt_obj = datetime.strptime(raw_date[5:25], "%d %b %Y %H:%M:%S")
                     formatted_time = dt_obj.strftime("%b-%d %I:%M%p")
                 except Exception:
-                    formatted_time = raw_date[5:22]
+                    try:
+                        dt_obj = datetime.strptime(raw_date[:25], "%a, %d %b %Y %H:%M:%S")
+                        formatted_time = dt_obj.strftime("%b-%d %I:%M%p")
+                    except Exception:
+                        formatted_time = raw_date[:22]
 
                 score = float(sia.polarity_scores(clean_title)["compound"])
                 sentiment = (
@@ -73,14 +100,14 @@ def scrape_news_vader(ticker_symbol):
                     "score": round(score, 2),
                 })
 
-            # เรียงข่าวล่าสุดลงไปข้างล่าง
+            # เรียงข่าวจากวันเวลาล่าสุดลงไปข้างล่าง (Most Recent First)
             parsed_news = sorted(parsed_news, key=lambda x: x["dt_obj"], reverse=True)[:15]
 
             for n in parsed_news:
                 del n["dt_obj"]
 
     except Exception as e:
-        print("News Error:", e)
+        print("News Scrape Error:", e)
 
     return parsed_news
 
